@@ -2,41 +2,16 @@ version: '3.8'
 
 services:
   # ----------------------------------------------------------------------------
-  # 1. REVERSE PROXY & AUTOMATIC SSL (Traefik v3)
-  # ----------------------------------------------------------------------------
-  traefik:
-    image: traefik:v3.0
-    container_name: ei-traefik
-    restart: always
-    command:
-      - "--api.insecure=false"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@atendezen.com.br}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "traefik_certs:/letsencrypt"
-    networks:
-      - ei-network
-
-  # ----------------------------------------------------------------------------
-  # 2. BANCO DE DADOS RELACIONAL (PostgreSQL 16)
+  # 1. BANCO DE DADOS RELACIONAL (PostgreSQL 16)
   # ----------------------------------------------------------------------------
   postgres:
     image: postgres:16-alpine
     container_name: ei-postgres
     restart: always
     environment:
-      - POSTGRES_USER=postgres
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-ei_aios_secure_pass_2026}
-      - POSTGRES_DB=postgres
+      - POSTGRES_DB=${POSTGRES_DB:-postgres}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../supabase/migrations/0001_core_schema.sql:/docker-entrypoint-initdb.d/01_core_schema.sql:ro
@@ -53,7 +28,7 @@ services:
       - ei-network
 
   # ----------------------------------------------------------------------------
-  # 3. CAMADA REST API POSTGREST (Supabase-Compatible API Engine)
+  # 2. CAMADA REST API POSTGREST (Supabase-Compatible API Engine)
   # ----------------------------------------------------------------------------
   postgrest:
     image: postgrest/postgrest:v12.2.0
@@ -71,7 +46,7 @@ services:
       - ei-network
 
   # ----------------------------------------------------------------------------
-  # 4. MOTOR DE AGENTES & WORKER AUTÔNOMO (Agent Core API)
+  # 3. MOTOR DE AGENTES & WORKER AUTÔNOMO (Agent Core API)
   # ----------------------------------------------------------------------------
   agent-core:
     build:
@@ -82,16 +57,17 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=4000
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-mock-key-for-dev}
       - SUPABASE_URL=http://postgrest:3000
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-super-secret-jwt-token-with-at-least-32-characters-long}
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - WORKER_POLL_INTERVAL_MS=5000
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.agentcore.rule=Host(`api.${DOMAIN}`)"
+      - "traefik.docker.network=network_swarm_public"
+      - "traefik.http.routers.agentcore.rule=Host(`api.${DOMAIN:-eiaios.atendezen.com.br}`)"
       - "traefik.http.routers.agentcore.entrypoints=websecure"
-      - "traefik.http.routers.agentcore.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.agentcore.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.agentcore.loadbalancer.server.port=4000"
     depends_on:
       postgres:
@@ -102,9 +78,10 @@ services:
       - "127.0.0.1:4000:4000"
     networks:
       - ei-network
+      - network_swarm_public
 
   # ----------------------------------------------------------------------------
-  # 5. FRONTEND COCKPIT DO FUNDADOR (Next.js 15 Web UI)
+  # 4. FRONTEND COCKPIT DO FUNDADOR (Next.js 15 Web UI)
   # ----------------------------------------------------------------------------
   web-ui:
     build:
@@ -114,49 +91,54 @@ services:
     restart: always
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_SUPABASE_URL=https://api.${DOMAIN}
+      - NEXT_PUBLIC_SUPABASE_URL=https://api.${DOMAIN:-eiaios.atendezen.com.br}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-super-secret-jwt-token-with-at-least-32-characters-long}
-      - NEXT_PUBLIC_AGENT_CORE_URL=https://api.${DOMAIN}
+      - NEXT_PUBLIC_AGENT_CORE_URL=https://api.${DOMAIN:-eiaios.atendezen.com.br}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.webui.rule=Host(`app.${DOMAIN}`) || Host(`${DOMAIN}`)"
+      - "traefik.docker.network=network_swarm_public"
+      - "traefik.http.routers.webui.rule=Host(`app.${DOMAIN:-eiaios.atendezen.com.br}`) || Host(`${DOMAIN:-eiaios.atendezen.com.br}`)"
       - "traefik.http.routers.webui.entrypoints=websecure"
-      - "traefik.http.routers.webui.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.webui.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.webui.loadbalancer.server.port=3000"
     depends_on:
       - agent-core
     networks:
       - ei-network
+      - network_swarm_public
 
   # ----------------------------------------------------------------------------
-  # 6. MOTOR DE AUTOMAÇÃO E WEBHOOKS (n8n Self-Hosted)
+  # 5. MOTOR DE AUTOMAÇÃO E WEBHOOKS (n8n Self-Hosted)
   # ----------------------------------------------------------------------------
   n8n:
     image: docker.n8n.io/n8nio/n8n:latest
     container_name: ei-n8n
     restart: always
     environment:
-      - N8N_HOST=n8n.${DOMAIN}
+      - N8N_HOST=n8n.${DOMAIN:-eiaios.atendezen.com.br}
       - N8N_PORT=5678
       - N8N_PROTOCOL=https
-      - WEBHOOK_URL=https://n8n.${DOMAIN}/
+      - WEBHOOK_URL=https://n8n.${DOMAIN:-eiaios.atendezen.com.br}/
       - GENERIC_TIMEZONE=America/Sao_Paulo
     volumes:
       - n8n_data:/home/node/.n8n
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN}`)"
+      - "traefik.docker.network=network_swarm_public"
+      - "traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN:-eiaios.atendezen.com.br}`)"
       - "traefik.http.routers.n8n.entrypoints=websecure"
-      - "traefik.http.routers.n8n.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.n8n.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
     networks:
       - ei-network
+      - network_swarm_public
 
 volumes:
-  traefik_certs:
   postgres_data:
   n8n_data:
 
 networks:
   ei-network:
     driver: bridge
+  network_swarm_public:
+    external: true

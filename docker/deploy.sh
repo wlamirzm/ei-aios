@@ -10,27 +10,26 @@ echo "⚡ EI-AIOS: Iniciando Deploy na VPS Hostinger (187.77.49.211)"
 echo "🌐 Domínio: eiaios.atendezen.com.br"
 echo "================================================================="
 
-# 1. Verifica pré-requisitos: Docker e Docker Compose
-if ! command -v docker &> /dev/null; then
-    echo "📦 Instalando Docker Engine..."
-    apt-get update -y
-    apt-get install -y ca-certificates curl gnupg
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    apt-get update -y
-    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+# 1. Garante que o .env existe na raiz e na pasta docker
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$ROOT_DIR"
+
+if [ -f .env ]; then
+    cp .env docker/.env
 fi
 
-echo "✅ Docker está instalado: $(docker --version)"
+# 2. Remove contêiner ei-traefik antigo se estiver presente (o Traefik existente no Swarm é quem gerencia 80/443)
+if docker ps -a --format '{{.Names}}' | grep -q "^ei-traefik$"; then
+    echo "🧹 Removendo contêiner redundante ei-traefik..."
+    docker rm -f ei-traefik || true
+fi
 
-# 2. Sobe os 6 contêineres: Traefik, Postgres 16, PostgREST, Agent Core, Web UI e n8n
-echo "🚀 Subindo a stack de contêineres..."
-cd "$(dirname "$0")/.."
-docker compose -f docker/docker-compose.yml --env-file .env up -d --build
+# 3. Sobe os 5 contêineres: Postgres 16, PostgREST, Agent Core, Web UI e n8n conectados ao Traefik Swarm
+echo "🚀 Subindo a stack de contêineres conectada à rede network_swarm_public..."
+docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
 
-# 3. Status dos Contêineres
+# 4. Status dos Contêineres
 echo "================================================================="
 echo "🔍 Status dos Contêineres do EI-AIOS:"
 docker compose -f docker/docker-compose.yml ps
@@ -40,4 +39,3 @@ echo "👉 Web UI (Cockpit): https://app.eiaios.atendezen.com.br"
 echo "👉 API Agent Core:   https://api.eiaios.atendezen.com.br"
 echo "👉 n8n Automações:   https://n8n.eiaios.atendezen.com.br"
 echo "================================================================="
-
