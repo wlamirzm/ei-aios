@@ -68,6 +68,7 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     echo "Recarregando schema cache do PostgREST via NOTIFY e update..."
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload schema';" || true
     docker service update --force ei-aios_postgrest 2>/dev/null || true
+    docker service update --force ei-aios_agent-core 2>/dev/null || true
 fi
 
 # 6. Status dos Serviços

@@ -347,10 +347,10 @@ apiRouter.get('/api/v1/agents', async (_req: Request, res: Response) => {
     if (error) {
       res.status(500).json({
         success: false,
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
+        rawError: error,
+        stringifiedError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+        keys: Object.keys(error),
+        type: typeof error
       });
       return;
     }
