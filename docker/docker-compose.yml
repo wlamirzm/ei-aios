@@ -54,7 +54,7 @@ services:
       - PORT=4000
       - GEMINI_API_KEY=${GEMINI_API_KEY:-mock-key-for-dev}
       - SUPABASE_URL=http://postgrest:3000
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-super-secret-jwt-token-with-at-least-32-characters-long}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoicG9zdGdyZXMiLCJpc3MiOiJzdXBhYmFzZSIsImlhdCI6MTcwMDAwMDAwMCwiZXhwIjoyNTAwMDAwMDAwfQ.DE7X6HeS6GhqGPQgUvQDpm8VrHHsVDkKyahIwDEu62s}
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - WORKER_POLL_INTERVAL_MS=5000
     deploy:
