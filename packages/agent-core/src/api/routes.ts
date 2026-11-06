@@ -337,17 +337,20 @@ apiRouter.get('/api/v1/metrics/finops', async (_req: Request, res: Response, nex
 // ------------------------------------------------------------------------------
 // 6. GET /api/v1/agents (Listar Catálogo dos 11 Agentes)
 // ------------------------------------------------------------------------------
-apiRouter.get('/api/v1/agents', async (_req: Request, res: Response, next: NextFunction) => {
+apiRouter.get('/api/v1/agents', async (_req: Request, res: Response) => {
   try {
     const { data: agents, error } = await supabase
       .from('agents')
       .select('*')
       .order('id', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      res.status(500).json({ success: false, error: error.message, details: error });
+      return;
+    }
     res.json({ success: true, agents: agents || [] });
-  } catch (error) {
-    next(error);
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error?.message || String(error), details: error });
   }
 });
 

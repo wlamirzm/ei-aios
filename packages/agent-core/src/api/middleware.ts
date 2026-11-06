@@ -30,10 +30,11 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
   }
 
   const statusCode = err.statusCode || err.status || 500;
-  const message = err.message || 'Internal Server Error';
+  const message = err.message || (typeof err === 'string' ? err : JSON.stringify(err)) || 'Internal Server Error';
 
   res.status(statusCode).json({
     error: message,
+    details: err.details || err.hint || (typeof err === 'object' ? err : undefined),
     statusCode
   });
 }
