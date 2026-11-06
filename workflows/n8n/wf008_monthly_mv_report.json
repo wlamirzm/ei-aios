@@ -1,0 +1,63 @@
+{
+  "name": "WF-008: Fechamento Mensal de Economia Verificada (M&V e Cobrança)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "triggerAtDayOfMonth": 1,
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "name": "Cron Mensal Dia 1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://agent-core:4000/api/v1/objectives",
+        "method": "POST",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "objective",
+              "value": "Executar fechamento mensal de Medição & Verificação (M&V) e apurar faturamento de Success Fee"
+            },
+            {
+              "name": "priority",
+              "value": "P1"
+            },
+            {
+              "name": "workflow_code",
+              "value": "WF-008"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Trigger WF-008 on Agent Core",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 300]
+    }
+  ],
+  "connections": {
+    "Cron Mensal Dia 1": {
+      "main": [
+        [
+          {
+            "node": "Trigger WF-008 on Agent Core",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
+

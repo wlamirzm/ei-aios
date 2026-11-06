@@ -1,0 +1,62 @@
+{
+  "name": "WF-003: Diagnóstico Energético Automatizado",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wf003-energy-diagnosis",
+        "options": {}
+      },
+      "name": "Webhook Ingestion",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://agent-core:4000/api/v1/energy/upload-bill",
+        "sendBinaryData": true,
+        "options": {}
+      },
+      "name": "Call Agent Core API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#energy-diagnostics",
+        "text": "=⚡ *Novo Diagnóstico Energético Processado*\n*Unidade:* {{$json.extractedData.consumer_unit_code}}\n*Economia Anual Potencial:* R$ {{$json.auditResult.total_annual_potential_savings_brl}}"
+      },
+      "name": "Notify Founder",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [720, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Ingestion": {
+      "main": [
+        [
+          {
+            "node": "Call Agent Core API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Agent Core API": {
+      "main": [
+        [
+          {
+            "node": "Notify Founder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
+

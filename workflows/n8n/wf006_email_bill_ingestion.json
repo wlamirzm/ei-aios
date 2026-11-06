@@ -1,0 +1,76 @@
+{
+  "name": "WF-006: Ingestão Zero-Touch de Faturas via Email/WhatsApp",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "filters": {
+          "readStatus": "unread"
+        }
+      },
+      "name": "Email IMAP Trigger (faturas@)",
+      "type": "n8n-nodes-base.emailReadImap",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$binary.attachment_0.mimeType}}",
+              "value2": "application/pdf"
+            }
+          ]
+        }
+      },
+      "name": "Check PDF Attachment",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://agent-core:4000/api/v1/energy/upload-bill",
+        "sendBinaryData": true,
+        "binaryPropertyName": "attachment_0",
+        "options": {}
+      },
+      "name": "Forward to Agent Core Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 260]
+    }
+  ],
+  "connections": {
+    "Email IMAP Trigger (faturas@)": {
+      "main": [
+        [
+          {
+            "node": "Check PDF Attachment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check PDF Attachment": {
+      "main": [
+        [
+          {
+            "node": "Forward to Agent Core Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
+
