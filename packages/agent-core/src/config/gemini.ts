@@ -168,6 +168,90 @@ export class GeminiService {
     };
   }
 
+  /**
+   * Conversação direta e interativa com qualquer um dos 11 agentes.
+   */
+  async chatWithAgent(params: {
+    agentId: string;
+    systemInstruction: string;
+    message: string;
+    history?: Array<{ role: 'user' | 'model'; text: string }>;
+    model?: string;
+  }): Promise<{ reply: string; tokensUsed: number; costEstimateUsd: number }> {
+    const startTime = Date.now();
+    const model = params.model || env.GEMINI_DEFAULT_FAST_MODEL;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let reply = '';
+
+    try {
+      if (!this.client || env.GEMINI_API_KEY === 'mock-key-for-dev') {
+        reply = `[${params.agentId}] Olá! Sou o ${params.agentId}. Recebi sua mensagem: "${params.message}". O sistema está 100% pronto e operacional para analisar o mercado de energia, faturas e auditoria ANEEL!`;
+        inputTokens = Math.max(50, Math.round(params.message.length / 4));
+        outputTokens = Math.round(reply.length / 4);
+      } else {
+        const contents: any[] = [];
+        if (params.history && params.history.length > 0) {
+          for (const item of params.history) {
+            contents.push({
+              role: item.role === 'model' ? 'model' : 'user',
+              parts: [{ text: item.text }]
+            });
+          }
+        }
+        contents.push({
+          role: 'user',
+          parts: [{ text: params.message }]
+        });
+
+        const response = await this.client.models.generateContent({
+          model,
+          contents,
+          config: {
+            systemInstruction: params.systemInstruction,
+            temperature: 0.3
+          }
+        });
+
+        reply = response.text || 'Sem resposta do modelo.';
+        if (response.usageMetadata) {
+          inputTokens = response.usageMetadata.promptTokenCount || 0;
+          outputTokens = response.usageMetadata.candidatesTokenCount || 0;
+        } else {
+          inputTokens = Math.round(params.message.length / 4);
+          outputTokens = Math.round(reply.length / 4);
+        }
+      }
+    } catch (err: any) {
+      console.error(`[GeminiService.chatWithAgent] Error:`, err);
+      reply = `Desculpe, ocorreu um erro ao processar sua mensagem: ${err?.message || err}`;
+    }
+
+    const executionTimeMs = Date.now() - startTime;
+    const costEstimateUsd = estimateTokenCost(model, inputTokens, outputTokens);
+
+    try {
+      await supabase.from('agent_runs').insert({
+        agent_id: params.agentId,
+        model_provider: 'google',
+        model_name: model,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        execution_time_ms: executionTimeMs,
+        cost_estimate: costEstimateUsd,
+        status: 'success'
+      });
+    } catch (err) {
+      console.warn('[GeminiService] Could not log chat telemetry:', err);
+    }
+
+    return {
+      reply,
+      tokensUsed: inputTokens + outputTokens,
+      costEstimateUsd
+    };
+  }
+
   private generateMockResponse(params: GeminiCallParams): Record<string, any> {
     if (params.agentId === 'AG-001') {
       return {

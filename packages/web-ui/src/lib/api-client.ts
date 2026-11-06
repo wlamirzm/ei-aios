@@ -55,3 +55,29 @@ export async function uploadEnergyBill(consumerUnitId: string, file: File) {
   return res.json();
 }
 
+export async function chatWithAgent(agentId: string, message: string, history?: Array<{ role: 'user' | 'model'; text: string }>) {
+  const res = await fetch(`${BASE_URL}/api/v1/agents/${agentId}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, history })
+  });
+  if (!res.ok) throw new Error('Falha ao conversar com o agente');
+  return res.json();
+}
+
+export async function cleanDatabase() {
+  const res = await fetch(`${BASE_URL}/api/v1/system/clean-database`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!res.ok) throw new Error('Falha ao limpar base de dados');
+  return res.json();
+}
+
+export async function fetchAgents() {
+  const res = await fetch(`${BASE_URL}/api/v1/agents`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Falha ao listar agentes');
+  return res.json();
+}
+
+

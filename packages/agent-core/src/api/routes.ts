@@ -12,6 +12,7 @@ import {
   ApprovalStatus
 } from '@ei-aios/shared';
 import { supabase } from '../config/supabase.js';
+import { geminiService } from '../config/gemini.js';
 import { orchestrator } from '../engine/orchestrator.js';
 import { autonomousWorker } from '../engine/worker.js';
 import { workflowRunner } from '../engine/workflow-runner.js';
@@ -327,6 +328,94 @@ apiRouter.get('/api/v1/metrics/finops', async (_req: Request, res: Response, nex
       cost_per_artifact_usd: Math.round(costPerArtifact * 10000) / 10000,
       total_tasks_count: totalTasks,
       total_runs_count: totalRunsCount
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// 6. GET /api/v1/agents (Listar Catálogo dos 11 Agentes)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/agents', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data: agents, error } = await supabase
+      .from('agents')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (error) throw error;
+    res.json({ success: true, agents: agents || [] });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// 7. POST /api/v1/agents/:id/chat (Conversação Interativa Direta com o Agente)
+// ------------------------------------------------------------------------------
+apiRouter.post('/api/v1/agents/:id/chat', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const agentId = String(req.params.id);
+    const { message, history } = req.body;
+
+    if (!message || typeof message !== 'string') {
+      res.status(400).json({ error: 'Campo message é obrigatório.' });
+      return;
+    }
+
+    const { data: agent, error } = await supabase
+      .from('agents')
+      .select('*')
+      .eq('id', agentId)
+      .single();
+
+    if (error || !agent) {
+      res.status(404).json({ error: `Agente ${agentId} não encontrado.` });
+      return;
+    }
+
+    const model = agent.configuration?.model || (agentId === 'AG-001' || agentId === 'AG-003' ? 'gemini-2.5-pro' : 'gemini-2.5-flash');
+
+    const result = await geminiService.chatWithAgent({
+      agentId,
+      systemInstruction: agent.system_prompt,
+      message,
+      history,
+      model
+    });
+
+    res.json({
+      success: true,
+      agentId,
+      agentName: agent.name,
+      reply: result.reply,
+      tokensUsed: result.tokensUsed,
+      costEstimateUsd: result.costEstimateUsd
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// 8. POST /api/v1/system/clean-database (Limpeza total para ambiente Zero KM)
+// ------------------------------------------------------------------------------
+apiRouter.post('/api/v1/system/clean-database', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Apaga dados transacionais e clientes piloto mantendo a estrutura dos 11 agentes e conhecimentos regulatórios
+    await supabase.from('approvals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('artifacts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('energy_bills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('consumer_units').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('agent_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+    res.json({
+      success: true,
+      message: 'Base limpa com sucesso. Todos os registros de clientes, UCs e tarefas foram zerados. Catálogo dos 11 agentes e normas ANEEL intactos.',
+      timestamp: new Date().toISOString()
     });
   } catch (error) {
     next(error);
