@@ -94,6 +94,8 @@ services:
     restart: always
     environment:
       - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0
       - NEXT_PUBLIC_SUPABASE_URL=https://api.${DOMAIN:-eiaios.atendezen.com.br}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-super-secret-jwt-token-with-at-least-32-characters-long}
       - NEXT_PUBLIC_AGENT_CORE_URL=https://api.${DOMAIN:-eiaios.atendezen.com.br}

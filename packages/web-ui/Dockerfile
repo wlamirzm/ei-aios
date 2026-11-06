@@ -19,6 +19,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
 COPY --from=builder /app/packages/web-ui/.next/standalone ./
 COPY --from=builder /app/packages/web-ui/.next/static ./packages/web-ui/.next/static
