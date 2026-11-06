@@ -67,11 +67,9 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     echo "📊 Total de Agentes no Banco:"
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "SELECT id, name, enabled FROM agents ORDER BY id;"
 
-    echo "Recarregando schema cache do PostgREST..."
-    POSTGREST_CONTAINER=$(docker ps -q -f name=ei-aios_postgrest | head -n 1)
-    if [ -n "$POSTGREST_CONTAINER" ]; then
-        docker exec "$POSTGREST_CONTAINER" kill -SIGUSR1 1 2>/dev/null || true
-    fi
+    echo "Recarregando schema cache do PostgREST via NOTIFY e update..."
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "NOTIFY pgrst, 'reload schema';" || true
+    docker service update --force ei-aios_postgrest 2>/dev/null || true
 fi
 
 # 6. Status dos Serviços
