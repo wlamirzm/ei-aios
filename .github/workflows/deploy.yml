@@ -46,7 +46,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
-          port: 22
+          port: ${{ secrets.SSH_PORT || 44322 }}
           script_stop: true
           command_timeout: 10m
           script: |
@@ -56,3 +56,4 @@ jobs:
             git reset --hard origin/main
             bash docker/deploy.sh
             echo "🎉 [CI/CD] Deploy concluído com sucesso!"
+
