@@ -40,9 +40,9 @@ docker service update --force ei-aios_web-ui 2>/dev/null || true
 # 5. Aplica schema e seed limpo no PostgreSQL
 echo "🗄️ Inicializando banco de dados e catálogo dos 11 agentes..."
 sleep 5
-POSTGRES_CONTAINER=$(docker ps -q -f name=ei-aios_postgres | head -n 1)
+POSTGRES_CONTAINER=$(docker ps -q --filter "label=com.docker.swarm.service.name=ei-aios_postgres" | head -n 1)
 if [ -n "$POSTGRES_CONTAINER" ]; then
-    echo "Executando migrações no contêiner $POSTGRES_CONTAINER..."
+    echo "Executando migrações no contêiner PostgreSQL ($POSTGRES_CONTAINER)..."
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0001_core_schema.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0002_rls_and_triggers.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/seed.sql
