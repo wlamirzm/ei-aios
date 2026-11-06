@@ -33,26 +33,67 @@ ALTER TABLE approvals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE artifacts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_sources ENABLE ROW LEVEL SECURITY;
 
+-- 2.5 GARANTIA DE PRIVILÉGIOS NO SCHEMA PUBLIC
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role, postgres;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role, postgres;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, postgres;
+
 -- 3. POLÍTICAS DE ACESSO (SERVICE ROLE TEM ACESSO TOTAL)
+DROP POLICY IF EXISTS "Service role full access on agents" ON agents;
 CREATE POLICY "Service role full access on agents" ON agents FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access on clients" ON clients;
 CREATE POLICY "Service role full access on clients" ON clients FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access on consumer_units" ON consumer_units;
 CREATE POLICY "Service role full access on consumer_units" ON consumer_units FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access on energy_bills" ON energy_bills;
 CREATE POLICY "Service role full access on energy_bills" ON energy_bills FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access on tasks" ON tasks;
 CREATE POLICY "Service role full access on tasks" ON tasks FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access on agent_runs" ON agent_runs;
 CREATE POLICY "Service role full access on agent_runs" ON agent_runs FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access on approvals" ON approvals;
 CREATE POLICY "Service role full access on approvals" ON approvals FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access on artifacts" ON artifacts;
 CREATE POLICY "Service role full access on artifacts" ON artifacts FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role full access on knowledge_sources" ON knowledge_sources;
 CREATE POLICY "Service role full access on knowledge_sources" ON knowledge_sources FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- 4. POLÍTICAS PARA USUÁRIOS AUTENTICADOS (COCKPIT DO FUNDADOR)
+DROP POLICY IF EXISTS "Authenticated users full access on agents" ON agents;
 CREATE POLICY "Authenticated users full access on agents" ON agents FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users full access on clients" ON clients;
 CREATE POLICY "Authenticated users full access on clients" ON clients FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users full access on consumer_units" ON consumer_units;
 CREATE POLICY "Authenticated users full access on consumer_units" ON consumer_units FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users full access on energy_bills" ON energy_bills;
 CREATE POLICY "Authenticated users full access on energy_bills" ON energy_bills FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users full access on tasks" ON tasks;
 CREATE POLICY "Authenticated users full access on tasks" ON tasks FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users full access on agent_runs" ON agent_runs;
 CREATE POLICY "Authenticated users full access on agent_runs" ON agent_runs FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users full access on approvals" ON approvals;
 CREATE POLICY "Authenticated users full access on approvals" ON approvals FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users full access on artifacts" ON artifacts;
 CREATE POLICY "Authenticated users full access on artifacts" ON artifacts FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Authenticated users full access on knowledge_sources" ON knowledge_sources;
 CREATE POLICY "Authenticated users full access on knowledge_sources" ON knowledge_sources FOR ALL TO authenticated USING (true) WITH CHECK (true);
 
 -- 5. ÍNDICES COMPLEMENTARES DE QUERY E BUSCA

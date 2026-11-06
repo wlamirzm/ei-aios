@@ -5,17 +5,41 @@
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 1. ENUMERAÇÕES DE CONTROLE
-CREATE TYPE task_status AS ENUM (
-  'pending', 'assigned', 'running', 'waiting_input', 
-  'review', 'approved', 'rejected', 'completed', 'failed', 'cancelled'
-);
+-- 0. GARANTIA DE ROLES DO POSTGREST/SUPABASE
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'anon') THEN
+    CREATE ROLE anon NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'authenticated') THEN
+    CREATE ROLE authenticated NOLOGIN;
+  END IF;
+  IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'service_role') THEN
+    CREATE ROLE service_role NOLOGIN;
+  END IF;
+END $$;
 
-CREATE TYPE priority_level AS ENUM ('P0', 'P1', 'P2', 'P3');
-CREATE TYPE action_risk_level AS ENUM ('LEVEL_0_AUTO', 'LEVEL_1_SUPERVISED', 'LEVEL_2_APPROVAL_REQUIRED');
+-- 1. ENUMERAÇÕES DE CONTROLE (IDEMPOTENTES)
+DO $$ BEGIN
+  CREATE TYPE task_status AS ENUM (
+    'pending', 'assigned', 'running', 'waiting_input', 
+    'review', 'approved', 'rejected', 'completed', 'failed', 'cancelled'
+  );
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE priority_level AS ENUM ('P0', 'P1', 'P2', 'P3');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE action_risk_level AS ENUM ('LEVEL_0_AUTO', 'LEVEL_1_SUPERVISED', 'LEVEL_2_APPROVAL_REQUIRED');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
 -- 2. CATÁLOGO DE AGENTES
-CREATE TABLE agents (
+CREATE TABLE IF NOT EXISTS agents (
   id VARCHAR(20) PRIMARY KEY, -- 'AG-001' a 'AG-011'
   name VARCHAR(100) NOT NULL,
   agent_type VARCHAR(50) NOT NULL,
@@ -41,7 +65,7 @@ CREATE TABLE agents (
 );
 
 -- 3. CLIENTES E UNIDADES CONSUMIDORAS (CORE BUSINESS ENERGIA)
-CREATE TABLE clients (
+CREATE TABLE IF NOT EXISTS clients (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   company_name VARCHAR(200) NOT NULL,
   cnpj VARCHAR(20) UNIQUE,
@@ -58,7 +82,7 @@ CREATE TABLE clients (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE consumer_units (
+CREATE TABLE IF NOT EXISTS consumer_units (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   uc_code VARCHAR(50) NOT NULL, -- Código da Instalação na Distribuidora
@@ -75,7 +99,7 @@ CREATE TABLE consumer_units (
 );
 
 -- 4. FATURAS DE ENERGIA E DIAGNÓSTICOS DETERMINÍSTICOS
-CREATE TABLE energy_bills (
+CREATE TABLE IF NOT EXISTS energy_bills (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   consumer_unit_id UUID NOT NULL REFERENCES consumer_units(id) ON DELETE CASCADE,
   billing_period VARCHAR(7) NOT NULL, -- Formato 'YYYY-MM'
@@ -104,7 +128,7 @@ CREATE TABLE energy_bills (
 );
 
 -- 5. TAREFAS E ORQUESTRAÇÃO (TASK ENVELOPE)
-CREATE TABLE tasks (
+CREATE TABLE IF NOT EXISTS tasks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_code VARCHAR(30) UNIQUE NOT NULL, -- Ex: 'TASK-0001'
   workflow_code VARCHAR(20), -- Ex: 'WF-001' a 'WF-008'
@@ -132,7 +156,7 @@ CREATE TABLE tasks (
 );
 
 -- 6. EXECUÇÕES DE AGENTES E CONTROLE DE CUSTOS (FINOPS)
-CREATE TABLE agent_runs (
+CREATE TABLE IF NOT EXISTS agent_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   agent_id VARCHAR(20) NOT NULL REFERENCES agents(id),
@@ -148,7 +172,7 @@ CREATE TABLE agent_runs (
 );
 
 -- 7. GOVERNANÇA HUMAN-IN-THE-LOOP (APROVAÇÕES)
-CREATE TABLE approvals (
+CREATE TABLE IF NOT EXISTS approvals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   requested_by VARCHAR(20) NOT NULL REFERENCES agents(id),
@@ -161,7 +185,7 @@ CREATE TABLE approvals (
 );
 
 -- 8. ARTEFATOS E ENTREGÁVEIS
-CREATE TABLE artifacts (
+CREATE TABLE IF NOT EXISTS artifacts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
   client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
@@ -177,7 +201,7 @@ CREATE TABLE artifacts (
 );
 
 -- 9. BASE REGULATÓRIA E TARIFÁRIA (KNOWLEDGE SOURCES)
-CREATE TABLE knowledge_sources (
+CREATE TABLE IF NOT EXISTS knowledge_sources (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   source_type VARCHAR(50) NOT NULL, -- 'aneel_resolution', 'distributor_tariff_table', 'tariff_flag', 'contract_template'
   source_name VARCHAR(255) NOT NULL,
@@ -193,9 +217,9 @@ CREATE TABLE knowledge_sources (
 );
 
 -- ÍNDICES DE PERFORMANCE PARA O WORKER AUTÔNOMO
-CREATE INDEX idx_tasks_status_priority ON tasks(status, priority);
-CREATE INDEX idx_tasks_parent_id ON tasks(parent_task_id);
-CREATE INDEX idx_approvals_status ON approvals(approval_status);
-CREATE INDEX idx_agent_runs_created_at ON agent_runs(created_at);
-CREATE INDEX idx_energy_bills_uc_period ON energy_bills(consumer_unit_id, billing_period);
+CREATE INDEX IF NOT EXISTS idx_tasks_status_priority ON tasks(status, priority);
+CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_task_id);
+CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(approval_status);
+CREATE INDEX IF NOT EXISTS idx_agent_runs_created_at ON agent_runs(created_at);
+CREATE INDEX IF NOT EXISTS idx_energy_bills_uc_period ON energy_bills(consumer_unit_id, billing_period);
 

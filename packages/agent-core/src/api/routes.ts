@@ -345,12 +345,22 @@ apiRouter.get('/api/v1/agents', async (_req: Request, res: Response) => {
       .order('id', { ascending: true });
 
     if (error) {
-      res.status(500).json({ success: false, error: error.message, details: error });
+      res.status(500).json({
+        success: false,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
       return;
     }
     res.json({ success: true, agents: agents || [] });
   } catch (error: any) {
-    res.status(500).json({ success: false, error: error?.message || String(error), details: error });
+    res.status(500).json({
+      success: false,
+      message: error?.message || String(error),
+      stack: error?.stack
+    });
   }
 });
 

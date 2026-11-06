@@ -46,10 +46,11 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     docker cp supabase/migrations/0001_core_schema.sql "$POSTGRES_CONTAINER":/tmp/01.sql
     docker cp supabase/migrations/0002_rls_and_triggers.sql "$POSTGRES_CONTAINER":/tmp/02.sql
     docker cp supabase/seed.sql "$POSTGRES_CONTAINER":/tmp/03.sql
-    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/01.sql || true
-    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/02.sql || true
-    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/03.sql || true
-    # Limpa dados transacionais de demonstração mantendo apenas agentes e conhecimentos
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/01.sql
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/02.sql
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/03.sql
+    
+    # Limpa dados transacionais mantendo o catálogo dos 11 agentes e normas ANEEL intactos
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "
       DELETE FROM approvals;
       DELETE FROM artifacts;
@@ -58,7 +59,14 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
       DELETE FROM consumer_units;
       DELETE FROM clients;
       DELETE FROM agent_runs;
-    " || true
+      GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
+      GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
+      GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role, postgres;
+    "
+
+    echo "📊 Total de Agentes no Banco:"
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "SELECT id, name, enabled FROM agents ORDER BY id;"
+
     echo "Recarregando schema cache do PostgREST..."
     POSTGREST_CONTAINER=$(docker ps -q -f name=ei-aios_postgrest | head -n 1)
     if [ -n "$POSTGREST_CONTAINER" ]; then
