@@ -1,0 +1,58 @@
+name: CI/CD Deploy to Hostinger VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Automated Tests & Verifications
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Monorepo Dependencies
+        run: npm ci
+
+      - name: Build Shared Package
+        run: npm run build --workspace=@ei-aios/shared
+
+      - name: Build Agent Core
+        run: npm run build --workspace=@ei-aios/agent-core
+
+      - name: Execute Deterministic Regulatory Tests
+        run: npm run test --workspace=@ei-aios/agent-core
+
+  deploy:
+    name: Deploy to Production VPS (Hostinger)
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Execute Remote Deployment via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script_stop: true
+          command_timeout: 10m
+          script: |
+            echo "⚡ [CI/CD] Iniciando atualização na VPS Hostinger..."
+            cd /opt/ei-aios
+            git fetch origin main
+            git reset --hard origin/main
+            bash docker/deploy.sh
+            echo "🎉 [CI/CD] Deploy concluído com sucesso!"
