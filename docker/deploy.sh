@@ -43,12 +43,9 @@ sleep 5
 POSTGRES_CONTAINER=$(docker ps -q -f name=ei-aios_postgres | head -n 1)
 if [ -n "$POSTGRES_CONTAINER" ]; then
     echo "Executando migrações no contêiner $POSTGRES_CONTAINER..."
-    docker cp supabase/migrations/0001_core_schema.sql "$POSTGRES_CONTAINER":/tmp/01.sql
-    docker cp supabase/migrations/0002_rls_and_triggers.sql "$POSTGRES_CONTAINER":/tmp/02.sql
-    docker cp supabase/seed.sql "$POSTGRES_CONTAINER":/tmp/03.sql
-    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/01.sql
-    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/02.sql
-    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/03.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0001_core_schema.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0002_rls_and_triggers.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/seed.sql
     
     # Limpa dados transacionais mantendo o catálogo dos 11 agentes e normas ANEEL intactos
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "
