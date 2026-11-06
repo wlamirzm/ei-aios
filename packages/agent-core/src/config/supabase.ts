@@ -3,7 +3,13 @@
 // ==============================================================================
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import ws from 'ws';
 import { env } from './env.js';
+
+// Polyfill native WebSocket for Node environments without native globalThis.WebSocket
+if (typeof globalThis.WebSocket === 'undefined') {
+  (globalThis as any).WebSocket = ws;
+}
 
 let supabaseClient: SupabaseClient | null = null;
 
@@ -20,4 +26,3 @@ export function getSupabase(): SupabaseClient {
 }
 
 export const supabase = getSupabase();
-

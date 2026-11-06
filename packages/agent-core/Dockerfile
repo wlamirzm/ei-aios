@@ -1,9 +1,9 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
 # Copy root workspace and package manifests
-COPY package.json tsconfig.base.json ./
+COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/tsconfig.json ./packages/shared/
 COPY packages/shared/src ./packages/shared/src
 COPY packages/agent-core/package.json packages/agent-core/tsconfig.json ./packages/agent-core/
@@ -14,7 +14,7 @@ RUN npm install
 RUN npm run build --workspace=@ei-aios/shared
 RUN npm run build --workspace=@ei-aios/agent-core
 
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 
 WORKDIR /app
 
@@ -31,4 +31,3 @@ COPY --from=builder /app/packages/agent-core/dist ./packages/agent-core/dist
 EXPOSE 4000
 
 CMD ["node", "packages/agent-core/dist/index.js"]
-
