@@ -339,22 +339,26 @@ apiRouter.get('/api/v1/metrics/finops', async (_req: Request, res: Response, nex
 // ------------------------------------------------------------------------------
 apiRouter.get('/api/v1/agents', async (_req: Request, res: Response) => {
   try {
-    const { data: agents, error } = await supabase
+    const result = await supabase
       .from('agents')
       .select('*')
       .order('id', { ascending: true });
 
-    if (error) {
+    if (result.error && Object.keys(result.error).length > 0) {
       res.status(500).json({
         success: false,
-        rawError: error,
-        stringifiedError: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-        keys: Object.keys(error),
-        type: typeof error
+        error: result.error,
+        status: result.status,
+        statusText: result.statusText
       });
       return;
     }
-    res.json({ success: true, agents: agents || [] });
+
+    res.json({
+      success: true,
+      agents: result.data || [],
+      count: result.data?.length || 0
+    });
   } catch (error: any) {
     res.status(500).json({
       success: false,
@@ -377,14 +381,16 @@ apiRouter.post('/api/v1/agents/:id/chat', async (req: Request, res: Response, ne
       return;
     }
 
-    const { data: agent, error } = await supabase
+    const agentQuery = await supabase
       .from('agents')
       .select('*')
       .eq('id', agentId)
-      .single();
+      .maybeSingle();
 
-    if (error || !agent) {
-      res.status(404).json({ error: `Agente ${agentId} não encontrado.` });
+    const agent = agentQuery.data;
+
+    if (!agent) {
+      res.status(404).json({ error: `Agente ${agentId} não encontrado.`, details: agentQuery });
       return;
     }
 
