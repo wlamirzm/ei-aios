@@ -41,6 +41,12 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role,
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role, postgres;
 
 -- 3. POLÍTICAS DE ACESSO (SERVICE ROLE TEM ACESSO TOTAL)
+DROP POLICY IF EXISTS "Anon read access on agents" ON agents;
+CREATE POLICY "Anon read access on agents" ON agents FOR SELECT TO anon, postgres USING (true);
+
+DROP POLICY IF EXISTS "Anon read access on knowledge_sources" ON knowledge_sources;
+CREATE POLICY "Anon read access on knowledge_sources" ON knowledge_sources FOR SELECT TO anon, postgres USING (true);
+
 DROP POLICY IF EXISTS "Service role full access on agents" ON agents;
 CREATE POLICY "Service role full access on agents" ON agents FOR ALL TO service_role USING (true) WITH CHECK (true);
 
