@@ -6,6 +6,7 @@ COPY package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/tsconfig.json ./packages/shared/
 COPY packages/shared/src ./packages/shared/src
 COPY packages/web-ui/package.json packages/web-ui/tsconfig.json packages/web-ui/next.config.mjs packages/web-ui/tailwind.config.ts packages/web-ui/postcss.config.mjs ./packages/web-ui/
+COPY packages/web-ui/public ./packages/web-ui/public
 COPY packages/web-ui/src ./packages/web-ui/src
 
 RUN npm install
@@ -26,4 +27,3 @@ COPY --from=builder /app/packages/web-ui/public ./packages/web-ui/public
 EXPOSE 3000
 
 CMD ["node", "packages/web-ui/server.js"]
-
