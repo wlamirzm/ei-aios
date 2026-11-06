@@ -19,11 +19,6 @@ services:
       - ../supabase/seed.sql:/docker-entrypoint-initdb.d/03_seed.sql:ro
     ports:
       - "127.0.0.1:5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     networks:
       - ei-network
 
@@ -40,8 +35,7 @@ services:
       - PGRST_DB_ANON_ROLE=postgres
       - PGRST_JWT_SECRET=${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
     networks:
       - ei-network
 
@@ -49,6 +43,7 @@ services:
   # 3. MOTOR DE AGENTES & WORKER AUTÔNOMO (Agent Core API)
   # ----------------------------------------------------------------------------
   agent-core:
+    image: docker-agent-core:latest
     build:
       context: ..
       dockerfile: packages/agent-core/Dockerfile
@@ -62,6 +57,15 @@ services:
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-super-secret-jwt-token-with-at-least-32-characters-long}
       - N8N_WEBHOOK_URL=http://n8n:5678/webhook
       - WORKER_POLL_INTERVAL_MS=5000
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=network_swarm_public"
+        - "traefik.http.routers.agentcore.rule=Host(`api.${DOMAIN:-eiaios.atendezen.com.br}`)"
+        - "traefik.http.routers.agentcore.entrypoints=websecure"
+        - "traefik.http.routers.agentcore.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.agentcore.loadbalancer.server.port=4000"
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=network_swarm_public"
@@ -70,10 +74,8 @@ services:
       - "traefik.http.routers.agentcore.tls.certresolver=letsencryptresolver"
       - "traefik.http.services.agentcore.loadbalancer.server.port=4000"
     depends_on:
-      postgres:
-        condition: service_healthy
-      postgrest:
-        condition: service_started
+      - postgres
+      - postgrest
     ports:
       - "127.0.0.1:4000:4000"
     networks:
@@ -84,6 +86,7 @@ services:
   # 4. FRONTEND COCKPIT DO FUNDADOR (Next.js 15 Web UI)
   # ----------------------------------------------------------------------------
   web-ui:
+    image: docker-web-ui:latest
     build:
       context: ..
       dockerfile: packages/web-ui/Dockerfile
@@ -94,6 +97,15 @@ services:
       - NEXT_PUBLIC_SUPABASE_URL=https://api.${DOMAIN:-eiaios.atendezen.com.br}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-super-secret-jwt-token-with-at-least-32-characters-long}
       - NEXT_PUBLIC_AGENT_CORE_URL=https://api.${DOMAIN:-eiaios.atendezen.com.br}
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=network_swarm_public"
+        - "traefik.http.routers.webui.rule=Host(`app.${DOMAIN:-eiaios.atendezen.com.br}`) || Host(`${DOMAIN:-eiaios.atendezen.com.br}`)"
+        - "traefik.http.routers.webui.entrypoints=websecure"
+        - "traefik.http.routers.webui.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.webui.loadbalancer.server.port=3000"
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=network_swarm_public"
@@ -122,6 +134,15 @@ services:
       - GENERIC_TIMEZONE=America/Sao_Paulo
     volumes:
       - n8n_data:/home/node/.n8n
+    deploy:
+      replicas: 1
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=network_swarm_public"
+        - "traefik.http.routers.n8n.rule=Host(`n8n.${DOMAIN:-eiaios.atendezen.com.br}`)"
+        - "traefik.http.routers.n8n.entrypoints=websecure"
+        - "traefik.http.routers.n8n.tls.certresolver=letsencryptresolver"
+        - "traefik.http.services.n8n.loadbalancer.server.port=5678"
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=network_swarm_public"
@@ -139,6 +160,7 @@ volumes:
 
 networks:
   ei-network:
-    driver: bridge
+    driver: overlay
+    attachable: true
   network_swarm_public:
     external: true
