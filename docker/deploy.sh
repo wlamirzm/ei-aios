@@ -37,7 +37,36 @@ docker stack deploy --resolve-image=never -c docker/docker-compose.yml ei-aios
 docker service update --force ei-aios_agent-core 2>/dev/null || true
 docker service update --force ei-aios_web-ui 2>/dev/null || true
 
-# 5. Status dos Serviços
+# 5. Aplica schema e seed limpo no PostgreSQL
+echo "🗄️ Inicializando banco de dados e catálogo dos 11 agentes..."
+sleep 5
+POSTGRES_CONTAINER=$(docker ps -q -f name=ei-aios_postgres | head -n 1)
+if [ -n "$POSTGRES_CONTAINER" ]; then
+    echo "Executando migrações no contêiner $POSTGRES_CONTAINER..."
+    docker cp supabase/migrations/0001_core_schema.sql "$POSTGRES_CONTAINER":/tmp/01.sql
+    docker cp supabase/migrations/0002_rls_and_triggers.sql "$POSTGRES_CONTAINER":/tmp/02.sql
+    docker cp supabase/seed.sql "$POSTGRES_CONTAINER":/tmp/03.sql
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/01.sql || true
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/02.sql || true
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -f /tmp/03.sql || true
+    # Limpa dados transacionais de demonstração mantendo apenas agentes e conhecimentos
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "
+      DELETE FROM approvals;
+      DELETE FROM artifacts;
+      DELETE FROM tasks;
+      DELETE FROM energy_bills;
+      DELETE FROM consumer_units;
+      DELETE FROM clients;
+      DELETE FROM agent_runs;
+    " || true
+    echo "Recarregando schema cache do PostgREST..."
+    POSTGREST_CONTAINER=$(docker ps -q -f name=ei-aios_postgrest | head -n 1)
+    if [ -n "$POSTGREST_CONTAINER" ]; then
+        docker exec "$POSTGREST_CONTAINER" kill -SIGUSR1 1 2>/dev/null || true
+    fi
+fi
+
+# 6. Status dos Serviços
 echo "================================================================="
 echo "🔍 Status dos Serviços da Stack EI-AIOS:"
 sleep 3
