@@ -31,7 +31,11 @@ docker rm -f ei-traefik ei-postgres ei-postgrest ei-agent-core ei-web-ui ei-n8n 
 
 # 4. Faz o deploy como Stack nativa do Docker Swarm
 echo "🚀 Publicando stack 'ei-aios' no Docker Swarm..."
-docker stack deploy -c docker/docker-compose.yml ei-aios
+docker stack deploy --resolve-image=never -c docker/docker-compose.yml ei-aios
+
+# Força atualização dos serviços que foram recompilados localmente
+docker service update --force ei-aios_agent-core 2>/dev/null || true
+docker service update --force ei-aios_web-ui 2>/dev/null || true
 
 # 5. Status dos Serviços
 echo "================================================================="
