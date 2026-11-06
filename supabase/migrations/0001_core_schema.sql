@@ -17,6 +17,7 @@ BEGIN
   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'service_role') THEN
     CREATE ROLE service_role NOLOGIN;
   END IF;
+  GRANT anon, authenticated, service_role TO postgres;
 END $$;
 
 -- 1. ENUMERAÇÕES DE CONTROLE (IDEMPOTENTES)

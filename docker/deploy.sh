@@ -62,6 +62,7 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
       GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
       GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
       GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role, postgres;
+      GRANT anon, authenticated, service_role TO postgres;
     "
 
     echo "📊 Total de Agentes no Banco:"

@@ -18,7 +18,7 @@ function resolveValidJwt(key: string): string {
   }
   const secret = process.env.JWT_SECRET || 'super-secret-jwt-token-with-at-least-32-characters-long';
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({ role: 'postgres', iss: 'supabase', iat: 1700000000, exp: 2500000000 })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ role: 'service_role', iss: 'supabase', iat: 1700000000, exp: 2500000000 })).toString('base64url');
   const signature = crypto.createHmac('sha256', secret).update(`${header}.${payload}`).digest('base64url');
   return `${header}.${payload}.${signature}`;
 }
