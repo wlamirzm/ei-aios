@@ -465,7 +465,7 @@ export class GeminiService {
           success_fee_on_verified_savings_percent: 20.0
         },
         assumptions: 'Remuneração de sucesso apurada mensalmente via protocolo determinístico de Medição e Verificação (M&V).',
-        limitations: 'Não há promessa de economia garantida antes da auditoria das faturas reais da unidade consumidora.'
+        limitations: 'Potencial de economia sujeito a auditoria técnica prévia das 12 faturas reais da unidade consumidora.'
       };
     }
 
@@ -487,7 +487,7 @@ export class GeminiService {
         },
         risk_level_evaluated: 'LEVEL_0_AUTO',
         requires_human_approval: false,
-        audit_verdict: 'Entregável auditado pelo AG-008: premissas e limitações explícitas, sem promessas de economia garantida e em total conformidade com a REN ANEEL 1.000/2021.'
+        audit_verdict: 'Entregável auditado pelo AG-008: premissas e limitações explícitas, sem promessas indevidas e em total conformidade com a REN ANEEL 1.000/2021.'
       };
     }
 

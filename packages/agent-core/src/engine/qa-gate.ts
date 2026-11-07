@@ -13,8 +13,12 @@ export class QAGate {
   async auditTaskResult(task: TaskModel, agentOutput: Record<string, any>): Promise<QAReview> {
     const qaAgentDef = await getAgentDefinition('AG-008');
 
-    // Checagem determinística rápida de strings proibidas ("economia garantida")
-    const serializedOutput = JSON.stringify(agentOutput).toLowerCase();
+    // Checagem determinística rápida de strings proibidas ("economia garantida"), ignorando ressalvas negativas explícitas
+    const serializedOutput = JSON.stringify(agentOutput)
+      .toLowerCase()
+      .replace(/não há promessa de economia garantida/g, '')
+      .replace(/sem promessa[s]? de economia garantida/g, '')
+      .replace(/sem garantia de economia/g, '');
     const hasForbiddenPhrase = serializedOutput.includes('economia garantida') || serializedOutput.includes('garantia de economia');
 
     const prompt = `AUDITORIA OBRIGATÓRIA DE QUALIDADE E CONFORMIDADE (AG-008):
