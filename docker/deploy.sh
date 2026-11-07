@@ -60,10 +60,6 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
       GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
       GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role, postgres;
       GRANT anon, authenticated, service_role TO postgres;
-      DROP POLICY IF EXISTS "Anon read access on agents" ON agents;
-      CREATE POLICY "Anon read access on agents" ON agents FOR SELECT TO anon, postgres, service_role, authenticated USING (true);
-      DROP POLICY IF EXISTS "Anon read access on knowledge_sources" ON knowledge_sources;
-      CREATE POLICY "Anon read access on knowledge_sources" ON knowledge_sources FOR SELECT TO anon, postgres, service_role, authenticated USING (true);
     "
 
     echo "📊 Total de Agentes no Banco:"
