@@ -31,6 +31,12 @@ export function getSupabase(): SupabaseClient {
         persistSession: false
       }
     });
+
+    // Se a URL apontar diretamente para o PostgREST standalone (ex: http://postgrest:3000 sem Kong/proxy),
+    // removemos o sufixo hardcoded '/rest/v1' para que as queries batam diretamente na raiz do PostgREST.
+    if ((supabaseClient as any).rest && !env.SUPABASE_URL.includes('/rest/v1')) {
+      (supabaseClient as any).rest.url = env.SUPABASE_URL.replace(/\/+$/, '');
+    }
   }
   return supabaseClient;
 }

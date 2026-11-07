@@ -5,3 +5,7 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'mock-anon-
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+if ((supabase as any).rest && !supabaseUrl.includes('/rest/v1')) {
+  (supabase as any).rest.url = supabaseUrl.replace(/\/+$/, '');
+}
+
