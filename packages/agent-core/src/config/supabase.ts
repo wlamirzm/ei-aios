@@ -12,10 +12,7 @@ if (typeof globalThis.WebSocket === 'undefined') {
   (globalThis as any).WebSocket = ws;
 }
 
-function resolveValidJwt(key: string): string {
-  if (key && key.split('.').length === 3) {
-    return key;
-  }
+function resolveValidJwt(_key?: string): string {
   const secret = process.env.JWT_SECRET || 'super-secret-jwt-token-with-at-least-32-characters-long';
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const payload = Buffer.from(JSON.stringify({ role: 'service_role', iss: 'supabase', iat: 1700000000, exp: 2500000000 })).toString('base64url');
