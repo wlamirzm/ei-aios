@@ -3,6 +3,7 @@
 -- Platform: Energy Intelligence AIOS (EI-AIOS)
 -- ==============================================================================
 
+SET search_path = public;
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 0. GARANTIA DE ROLES DO POSTGREST/SUPABASE

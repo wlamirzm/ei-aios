@@ -3,6 +3,8 @@
 -- Platform: Energy Intelligence AIOS (EI-AIOS)
 -- ==============================================================================
 
+SET search_path = public;
+
 -- 1. TRIGGER PARA ATUALIZAÇÃO AUTOMÁTICA DE updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$

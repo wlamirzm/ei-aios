@@ -3,6 +3,8 @@
 -- Platform: Energy Intelligence AIOS (EI-AIOS)
 -- ==============================================================================
 
+SET search_path = public;
+
 -- 1. CATÁLOGO DOS 11 AGENTES
 INSERT INTO agents (id, name, agent_type, version, role_description, system_prompt, configuration, enabled)
 VALUES

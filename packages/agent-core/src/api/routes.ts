@@ -441,3 +441,27 @@ apiRouter.post('/api/v1/system/clean-database', async (_req: Request, res: Respo
   }
 });
 
+// ------------------------------------------------------------------------------
+// 9. GET /api/v1/system/debug (Diagnóstico de Conectividade com PostgREST e BD)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/system/debug', async (_req: Request, res: Response) => {
+  try {
+    const rawRoot = await fetch('http://postgrest:3000/').then(r => r.json()).catch(e => ({ error: String(e) })) as any;
+    const rawAgents = await fetch('http://postgrest:3000/agents').then(r => r.text()).catch(e => ({ error: String(e) }));
+    const directSupabase = await supabase.from('agents').select('*');
+    res.json({
+      postgrestUrl: 'http://postgrest:3000',
+      postgrestSchemaDefinitions: Object.keys(rawRoot?.definitions || {}),
+      rawAgentsResponse: rawAgents,
+      supabaseResult: {
+        dataCount: directSupabase.data?.length ?? null,
+        error: directSupabase.error,
+        status: directSupabase.status,
+        statusText: directSupabase.statusText
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: String(err), stack: err?.stack });
+  }
+});
+
