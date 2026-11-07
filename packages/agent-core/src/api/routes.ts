@@ -56,6 +56,9 @@ apiRouter.post('/api/v1/objectives', async (req: Request, res: Response, next: N
       createdBy: 'FOUNDER'
     });
 
+    // Aciona ciclo imediato do worker em background para iniciar execução das subtarefas
+    autonomousWorker.triggerCycle().catch(() => {});
+
     res.status(201).json({
       success: true,
       parentTaskId: result.parentTaskId,
@@ -462,6 +465,84 @@ apiRouter.get('/api/v1/system/debug', async (_req: Request, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ error: String(err), stack: err?.stack });
+  }
+});
+
+// ------------------------------------------------------------------------------
+// 10. GET /api/v1/tasks (Listagem de Tarefas para o Cockpit e Kanban)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/tasks', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({
+      success: true,
+      tasks: data || [],
+      count: data?.length || 0
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// 11. GET /api/v1/approvals (Listagem de Aprovações Nível 2 Pendentes e Histórico)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/approvals', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data, error } = await supabase
+      .from('approvals')
+      .select('*, task:tasks(*)')
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({
+      success: true,
+      approvals: data || [],
+      count: data?.length || 0
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// 12. GET /api/v1/artifacts (Listagem de Artefatos e Relatórios Gerados)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/artifacts', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data, error } = await supabase
+      .from('artifacts')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({
+      success: true,
+      artifacts: data || [],
+      count: data?.length || 0
+    });
+  } catch (err) {
+    next(err);
   }
 });
 

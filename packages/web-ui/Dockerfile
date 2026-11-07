@@ -11,6 +11,12 @@ COPY packages/web-ui/src ./packages/web-ui/src
 
 RUN npm install
 RUN npm run build --workspace=@ei-aios/shared
+
+ARG NEXT_PUBLIC_AGENT_CORE_URL=https://api.eiaios.atendezen.com.br
+ARG NEXT_PUBLIC_SUPABASE_URL=https://api.eiaios.atendezen.com.br
+ENV NEXT_PUBLIC_AGENT_CORE_URL=$NEXT_PUBLIC_AGENT_CORE_URL
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+
 RUN npm run build --workspace=@ei-aios/web-ui
 
 FROM node:22-alpine AS runner

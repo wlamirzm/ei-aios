@@ -106,6 +106,27 @@ Por favor, execute o objetivo com rigor técnico absoluto. Retorne exclusivament
       contentMarkdown: reportMarkdown,
       structuredData: deterministicContext.deterministic_audit
     });
+  } else if (outputPayload.deliverable_title) {
+    const mappedType =
+      task.assigned_agent_id === AgentId.AG_007
+        ? 'commercial_proposal'
+        : task.assigned_agent_id === AgentId.AG_009
+        ? 'contest_dossier'
+        : 'strategic_plan';
+
+    await createAndSaveArtifact({
+      taskId: task.id,
+      clientId: task.client_id,
+      artifactType: mappedType,
+      title: `${outputPayload.deliverable_title} (${task.task_code})`,
+      summary: `Entregável gerado por ${task.assigned_agent_id} para o objetivo: ${task.objective}`,
+      contentMarkdown: `# ${outputPayload.deliverable_title}\n\n**Agente Responsável:** ${task.assigned_agent_id}\n**Objetivo:** ${task.objective}\n\n\`\`\`json\n${JSON.stringify(outputPayload, null, 2)}\n\`\`\``,
+      structuredData: outputPayload,
+      metadata: {
+        created_by_agent: task.assigned_agent_id,
+        task_code: task.task_code
+      }
+    }).catch(() => {});
   }
 
   return {
