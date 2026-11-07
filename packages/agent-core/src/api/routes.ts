@@ -344,8 +344,8 @@ apiRouter.get('/api/v1/agents', async (_req: Request, res: Response) => {
       .select('*')
       .order('id', { ascending: true });
 
-    if (result.error && Object.keys(result.error).length > 0) {
-      res.status(500).json({
+    if (result.error && (result.error.message || Object.keys(result.error).length > 0 || (result.status && result.status >= 400))) {
+      res.status(result.status || 500).json({
         success: false,
         error: result.error,
         status: result.status,

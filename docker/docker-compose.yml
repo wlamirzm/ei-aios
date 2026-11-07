@@ -29,7 +29,7 @@ services:
     environment:
       - PGRST_DB_URI=postgres://postgres:${POSTGRES_PASSWORD:-ei_aios_secure_pass_2026}@postgres:5432/postgres
       - PGRST_DB_SCHEMA=public
-      - PGRST_DB_ANON_ROLE=postgres
+      - PGRST_DB_ANON_ROLE=anon
       - PGRST_JWT_SECRET=${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
     depends_on:
       - postgres
