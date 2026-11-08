@@ -53,6 +53,7 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/seed.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0003_sprint1_security_rls.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0004_sprint2_cfo_unit_economics.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0005_sprint3_ag012_policies_and_rfc.sql
     
     # Garante permissões e compatibilidade de telemetria sem conceder escrita para anon
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "

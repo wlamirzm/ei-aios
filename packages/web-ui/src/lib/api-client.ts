@@ -210,7 +210,7 @@ export async function createEmailAccount(payload: {
   imap_port?: number;
   smtp_host?: string;
   smtp_port?: number;
-  operation_mode: 'read_summarize' | 'auto_action';
+  operation_mode: 'monitor_only' | 'read_summarize' | 'assisted_action' | 'auto_action';
 }) {
   const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts`, {
     method: 'POST',
@@ -227,7 +227,7 @@ export async function createEmailAccount(payload: {
 export async function updateEmailAccount(
   id: string,
   payload: Partial<{
-    operation_mode: 'read_summarize' | 'auto_action';
+    operation_mode: 'monitor_only' | 'read_summarize' | 'assisted_action' | 'auto_action';
     enabled: boolean;
     account_label: string;
   }>
@@ -260,7 +260,10 @@ export async function syncEmailAccount(id: string) {
   return data;
 }
 
-export async function simulateIncomingEmail(id: string, scenario: 'bill' | 'regulatory' | 'prompt_injection' = 'bill') {
+export async function simulateIncomingEmail(
+  id: string,
+  scenario: 'bill' | 'regulatory' | 'prompt_injection' | 'p0_critical' = 'bill'
+) {
   const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts/${id}/simulate`, {
     method: 'POST',
     headers: getAuthHeaders(true),

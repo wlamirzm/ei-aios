@@ -33,6 +33,7 @@ import {
 export default function EmailsPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [messages, setMessages] = useState<any[]>([]);
+  const [operationalMetrics, setOperationalMetrics] = useState<any | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
   // Form states for new account
@@ -43,7 +44,9 @@ export default function EmailsPage() {
   const [imapPort, setImapPort] = useState(993);
   const [smtpHost, setSmtpHost] = useState('');
   const [smtpPort, setSmtpPort] = useState(465);
-  const [operationMode, setOperationMode] = useState<'read_summarize' | 'auto_action'>('read_summarize');
+  const [operationMode, setOperationMode] = useState<
+    'monitor_only' | 'read_summarize' | 'assisted_action' | 'auto_action'
+  >('read_summarize');
 
   const [isCreating, setIsCreating] = useState(false);
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
@@ -59,6 +62,7 @@ export default function EmailsPage() {
       ]);
       if (accRes?.accounts) setAccounts(accRes.accounts);
       if (msgRes?.messages) setMessages(msgRes.messages);
+      if (msgRes?.operational_metrics) setOperationalMetrics(msgRes.operational_metrics);
     } catch {
       // ignore background error
     }
@@ -115,7 +119,10 @@ export default function EmailsPage() {
     }
   };
 
-  const handleToggleRowMode = async (accountId: string, newMode: 'read_summarize' | 'auto_action') => {
+  const handleToggleRowMode = async (
+    accountId: string,
+    newMode: 'monitor_only' | 'read_summarize' | 'assisted_action' | 'auto_action'
+  ) => {
     setBusyAccountId(accountId);
     try {
       await updateEmailAccount(accountId, { operation_mode: newMode });
@@ -125,8 +132,10 @@ export default function EmailsPage() {
       setFeedback({
         text: `Modo da conta atualizado para: ${
           newMode === 'auto_action'
-            ? 'Ação Automática (Ler, Resumir + Disparar Agentes)'
-            : 'Somente Ler e Resumir'
+            ? 'Ação Automática (Ler, Resumir + Disparar Agentes conforme Política)'
+            : newMode === 'assisted_action'
+              ? 'Ação Assistida (Cria Tarefa com Aprovação Humana Obrigatória)'
+              : 'Somente Monitorar e Resumir'
         }`
       });
     } catch (err: any) {
@@ -163,8 +172,10 @@ export default function EmailsPage() {
       setFeedback({
         text:
           modeUsed === 'auto_action'
-            ? `E-mail recebido e analisado pelo AG-012! Modo Ação Automática ativo: Tarefa ${taskCode} disparada automaticamente para ${res?.message?.recommended_agent_id}.`
-            : `E-mail recebido e resumido pelo AG-012 (Modo Somente Ler e Resumir). Confira o próximo passo recomendado abaixo!`
+            ? `E-mail recebido e analisado pelo AG-012! Modo Ação Automática ativo: Tarefa ${taskCode} disparada para ${res?.message?.recommended_agent_id}.`
+            : modeUsed === 'assisted_action'
+              ? `E-mail recebido! Modo Ação Assistida: Tarefa ${taskCode} criada aguardando aprovação humana em /approvals.`
+              : `E-mail recebido e resumido pelo AG-012 (Modo Somente Monitorar e Resumir). Confira o próximo passo recomendado abaixo!`
       });
       await loadData();
     } catch (err: any) {
@@ -216,7 +227,7 @@ export default function EmailsPage() {
           <div className="flex items-center gap-2.5">
             <Mail className="w-6 h-6 text-sky-400" />
             <h1 className="text-2xl font-bold text-white">
-              Central de E-mails HostGator cPanel & Triagem AG-012
+              Central de E-mails HostGator cPanel & Governança AG-012
             </h1>
             <span className="bg-sky-500/10 text-sky-400 border border-sky-500/30 text-xs font-mono font-bold px-2.5 py-0.5 rounded">
               AG-012 ONLINE
@@ -224,7 +235,8 @@ export default function EmailsPage() {
           </div>
           <p className="text-slate-400 text-sm mt-1">
             Cadastre múltiplas contas de e-mail cPanel da HostGator (IMAP SSL 993 / SMTP SSL 465) e escolha em cada linha entre{' '}
-            <strong className="text-slate-200">Somente Ler e Resumir</strong> ou{' '}
+            <strong className="text-slate-200">Somente Monitorar</strong>,{' '}
+            <strong className="text-amber-400">Ação Assistida</strong> ou{' '}
             <strong className="text-emerald-400">Ação Automática</strong>.
           </p>
         </div>
@@ -237,6 +249,63 @@ export default function EmailsPage() {
           <span>Atualizar Caixa ({messages.length})</span>
         </button>
       </div>
+
+      {/* INDICADORES OPERACIONAIS DO AG-012 (SEÇÃO 7.14) */}
+      {operationalMetrics && (
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+            <div className="text-[10px] font-mono uppercase text-slate-400">E-mails Processados</div>
+            <div className="text-lg font-bold font-mono text-white mt-0.5">
+              {operationalMetrics.total_messages_processed}
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">
+              {operationalMetrics.active_accounts_count} conta(s) ativa(s)
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+            <div className="text-[10px] font-mono uppercase text-slate-400">% Classificados</div>
+            <div className="text-lg font-bold font-mono text-sky-400 mt-0.5">
+              {operationalMetrics.classified_rate_percent}%
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">Contrato email.analysis</div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+            <div className="text-[10px] font-mono uppercase text-slate-400">P0 / P1 Críticos</div>
+            <div className="text-lg font-bold font-mono text-amber-400 mt-0.5">
+              {operationalMetrics.p0_p1_identified_count}
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">Triagem Prioritária</div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+            <div className="text-[10px] font-mono uppercase text-slate-400">Ações Automáticas</div>
+            <div className="text-lg font-bold font-mono text-emerald-400 mt-0.5">
+              {operationalMetrics.auto_actions_executed_count}
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">
+              +{operationalMetrics.assisted_actions_queued_count || 0} assistida(s)
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+            <div className="text-[10px] font-mono uppercase text-slate-400">Bloqueios Segurança</div>
+            <div className="text-lg font-bold font-mono text-rose-400 mt-0.5">
+              {operationalMetrics.actions_blocked_security_count}
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">Anti-Injection / Anexos</div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
+            <div className="text-[10px] font-mono uppercase text-slate-400">Minutas Geradas</div>
+            <div className="text-lg font-bold font-mono text-purple-300 mt-0.5">
+              {operationalMetrics.drafts_produced_count}
+            </div>
+            <div className="text-[10px] text-slate-500 font-mono">Prontas p/ Revisão</div>
+          </div>
+        </div>
+      )}
 
       {feedback && (
         <div
@@ -316,10 +385,15 @@ export default function EmailsPage() {
             <label className="text-[11px] text-slate-400 block mb-1">Modo Inicial na Linha</label>
             <select
               value={operationMode}
-              onChange={(e) => setOperationMode(e.target.value as 'read_summarize' | 'auto_action')}
+              onChange={(e) =>
+                setOperationMode(
+                  e.target.value as 'monitor_only' | 'read_summarize' | 'assisted_action' | 'auto_action'
+                )
+              }
               className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
             >
-              <option value="read_summarize">📖 Somente Ler e Resumir</option>
+              <option value="read_summarize">📖 Somente Monitorar e Resumir</option>
+              <option value="assisted_action">🛡️ Ação Assistida (c/ Aprovação)</option>
               <option value="auto_action">⚡ Ação Automática</option>
             </select>
           </div>
@@ -345,7 +419,8 @@ export default function EmailsPage() {
               Contas de E-mail Cadastradas ({accounts.length})
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Em cada linha, alterne quando quiser entre <strong>Somente Ler e Resumir</strong> ou <strong>Ação Automática</strong>.
+              Em cada linha, alterne quando quiser entre <strong>Somente Monitorar</strong>,{' '}
+              <strong>Ação Assistida</strong> ou <strong>Ação Automática</strong>.
             </p>
           </div>
         </div>
@@ -370,6 +445,7 @@ export default function EmailsPage() {
                 {accounts.map((acc) => {
                   const isBusy = busyAccountId === acc.id;
                   const isAuto = acc.operation_mode === 'auto_action';
+                  const isAssisted = acc.operation_mode === 'assisted_action';
 
                   return (
                     <tr key={acc.id} className="hover:bg-slate-950/40 transition">
@@ -387,15 +463,21 @@ export default function EmailsPage() {
                           disabled={isBusy}
                           value={acc.operation_mode}
                           onChange={(e) =>
-                            handleToggleRowMode(acc.id, e.target.value as 'read_summarize' | 'auto_action')
+                            handleToggleRowMode(
+                              acc.id,
+                              e.target.value as 'monitor_only' | 'read_summarize' | 'assisted_action' | 'auto_action'
+                            )
                           }
                           className={`rounded-lg px-3 py-1.5 text-xs font-semibold border focus:outline-none transition ${
                             isAuto
                               ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
-                              : 'bg-slate-950 border-slate-700 text-slate-200'
+                              : isAssisted
+                                ? 'bg-amber-950/60 border-amber-500/50 text-amber-300'
+                                : 'bg-slate-950 border-slate-700 text-slate-200'
                           }`}
                         >
-                          <option value="read_summarize">📖 Somente Ler e Resumir</option>
+                          <option value="read_summarize">📖 Somente Monitorar e Resumir</option>
+                          <option value="assisted_action">🛡️ Ação Assistida (Cria Tarefa c/ Aprovação)</option>
                           <option value="auto_action">⚡ Ação Automática (Disparar Agentes)</option>
                         </select>
                       </td>
@@ -494,6 +576,7 @@ export default function EmailsPage() {
           <div className="space-y-4">
             {messages.map((msg) => {
               const isAutoMode = msg.operation_mode_applied === 'auto_action';
+              const isAssistedMode = msg.operation_mode_applied === 'assisted_action';
               const hasTask = Boolean(msg.triggered_task_id || msg.triggered_task_code);
 
               return (
@@ -514,15 +597,31 @@ export default function EmailsPage() {
                         <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30">
                           Prioridade {msg.priority}
                         </span>
+                        {msg.confidence_score && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950 border border-slate-700 text-slate-300">
+                            Confiança: {Math.round(Number(msg.confidence_score) * 100)}%
+                          </span>
+                        )}
                         <span
                           className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                             isAutoMode
                               ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
-                              : 'bg-slate-950 border-slate-700 text-slate-400'
+                              : isAssistedMode
+                                ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+                                : 'bg-slate-950 border-slate-700 text-slate-400'
                           }`}
                         >
-                          {isAutoMode ? '⚡ Processado em Ação Automática' : '📖 Processado em Somente Ler e Resumir'}
+                          {isAutoMode
+                            ? '⚡ Processado em Ação Automática'
+                            : isAssistedMode
+                              ? '🛡️ Processado em Ação Assistida'
+                              : '📖 Processado em Somente Monitorar'}
                         </span>
+                        {msg.thread_id && (
+                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-slate-500">
+                            Thread: {String(msg.thread_id).slice(0, 22)}
+                          </span>
+                        )}
                       </div>
 
                       <h3 className="text-base font-bold text-white">{msg.subject}</h3>

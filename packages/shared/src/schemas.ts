@@ -346,6 +346,69 @@ export const CFODeliverableSchema = z.object({
 });
 
 // ------------------------------------------------------------------------------
+// 8-C. AG-012 EMAIL ANALYSIS CONTRACT SCHEMA (Seção 7.10 - BKL-011)
+// ------------------------------------------------------------------------------
+export const EmailOperationModeSchema = z.enum([
+  'monitor_only',
+  'read_summarize',
+  'assisted_action',
+  'auto_action'
+]);
+
+export const EmailAnalysisContractSchema = z.object({
+  schema_version: z.literal('1.0').default('1.0'),
+  message_type: z.literal('email.analysis').default('email.analysis'),
+  email_account_id: z.string(),
+  message_id: z.string(),
+  thread_id: z.string(),
+  received_at: z.string(),
+  classification: z.object({
+    priority: z.enum(['P0', 'P1', 'P2', 'P3']),
+    category: z.string(),
+    confidence: z.number().min(0).max(1)
+  }),
+  summary: z.string(),
+  entities: z.object({
+    sender: z.string(),
+    organization: z.string().nullable().default(null),
+    customer_id: z.string().nullable().default(null),
+    consumer_unit_id: z.string().nullable().default(null)
+  }),
+  requests: z.array(z.string()).default([]),
+  deadlines: z.array(z.string()).default([]),
+  commitments: z.array(z.string()).default([]),
+  risks: z.array(z.string()).default([]),
+  recommended_next_step: z.object({
+    action: z.string(),
+    owner_agent: z.string(),
+    reason: z.string(),
+    due_at: z.string().nullable().default(null)
+  }),
+  draft_reply: z.object({
+    required: z.boolean(),
+    subject: z.string(),
+    body: z.string(),
+    send_authorized: z.literal(false).default(false)
+  }),
+  automation: z.object({
+    account_mode: EmailOperationModeSchema,
+    eligible_for_agent_dispatch: z.boolean(),
+    dispatched: z.boolean(),
+    approval_required: z.boolean()
+  }),
+  attachments: z.array(
+    z.object({
+      filename: z.string(),
+      extension: z.string(),
+      allowed: z.boolean(),
+      reason: z.string().optional()
+    })
+  ).default([]),
+  evidence: z.array(z.string()).default([]),
+  limitations: z.array(z.string()).default([])
+});
+
+// ------------------------------------------------------------------------------
 // 9. API REQUEST / RESPONSE SCHEMAS
 // ------------------------------------------------------------------------------
 export const CreateObjectiveRequestSchema = z.object({
