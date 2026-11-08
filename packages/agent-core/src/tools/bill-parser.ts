@@ -92,3 +92,143 @@ Retorne estritamente o JSON válido conforme a estrutura.`;
   }
 }
 
+export interface BillIntegrityMetrics {
+  total_calculated_consumption_kwh: number;
+  taxes_total_brl: number;
+  taxes_percent_of_total: number;
+  line_items_sum_brl: number;
+  demand_overage_detected: boolean;
+  expected_overage_kw: number;
+}
+
+export interface BillIntegrityValidationResult {
+  is_valid: boolean;
+  validation_status: 'verified' | 'requires_review' | 'rejected';
+  discrepancy_score: number; // 0.0 (perfeita) a 1.0 (grave)
+  errors: string[];
+  warnings: string[];
+  metrics: BillIntegrityMetrics;
+  checked_at: string;
+}
+
+/**
+ * BKL-015 (GAP-P2-04): Validador determinístico de integridade de faturas (data_validator)
+ * para o AG-004. Confere matematicamente a consistência de grandezas, tributos e somas.
+ */
+export function validateExtractedBillIntegrity(bill: Partial<EnergyBillExtraction>): BillIntegrityValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const totalAmount = Number(bill.total_amount_brl || 0);
+  if (totalAmount <= 0) {
+    errors.push('Valor total faturado deve ser maior que zero (R$ 0,00 ou nulo detectado).');
+  }
+
+  // 1. Consumo total (Ponta + Fora de Ponta)
+  const peakKwh = Number(bill.consumption_peak_kwh || 0);
+  const offpeakKwh = Number(bill.consumption_offpeak_kwh || 0);
+  const totalConsumptionKwh = peakKwh + offpeakKwh;
+
+  if (totalConsumptionKwh <= 0 && (!bill.line_items || bill.line_items.length === 0)) {
+    warnings.push('Consumo total em kWh nulo ou não identificado na fatura.');
+  }
+
+  // 2. Integridade e consistência tributária (ICMS + PIS + COFINS + CIP)
+  const taxes = bill.taxes_breakdown || {
+    icms_rate: 0,
+    icms_amount_brl: 0,
+    pis_rate: 0,
+    pis_amount_brl: 0,
+    cofins_rate: 0,
+    cofins_amount_brl: 0,
+    cip_brl: 0
+  };
+
+  const taxesTotal =
+    Number(taxes.icms_amount_brl || 0) +
+    Number(taxes.pis_amount_brl || 0) +
+    Number(taxes.cofins_amount_brl || 0) +
+    Number(taxes.cip_brl || 0);
+
+  const taxesPercent = totalAmount > 0 ? (taxesTotal / totalAmount) * 100 : 0;
+
+  if (totalAmount > 0 && taxesTotal > totalAmount) {
+    errors.push(
+      `Inconsistência tributária crítica: a soma dos tributos (R$ ${taxesTotal.toFixed(
+        2
+      )}) é superior ao valor total faturado (R$ ${totalAmount.toFixed(2)}).`
+    );
+  } else if (totalAmount > 0 && taxesPercent > 60) {
+    warnings.push(
+      `Carga tributária incomum detectada: tributos representam ${taxesPercent.toFixed(1)}% da fatura (esperado: 25% a 45%).`
+    );
+  }
+
+  // 3. Validação de Soma dos Line Items (se houver itens discriminados)
+  let lineItemsSum = 0;
+  if (Array.isArray(bill.line_items) && bill.line_items.length > 0) {
+    lineItemsSum = bill.line_items.reduce((acc, item) => acc + Number(item.total_amount_brl || 0), 0);
+    const lineItemDiff = Math.abs(lineItemsSum - totalAmount);
+    if (lineItemDiff > 0.50) {
+      warnings.push(
+        `Divergência de soma dos itens: total dos itens (R$ ${lineItemsSum.toFixed(
+          2
+        )}) difere do total da fatura (R$ ${totalAmount.toFixed(2)}) por R$ ${lineItemDiff.toFixed(2)}.`
+      );
+    }
+  }
+
+  // 4. Consistência de Demanda e Ultrapassagem Regulatória (REN ANEEL 1.000/2021)
+  const contractedDemand = Math.max(
+    Number(bill.contracted_demand_peak_kw || 0),
+    Number(bill.contracted_demand_offpeak_kw || 0)
+  );
+  const measuredDemand = Math.max(
+    Number(bill.measured_demand_peak_kw || 0),
+    Number(bill.measured_demand_offpeak_kw || 0)
+  );
+
+  let demandOverageDetected = false;
+  let expectedOverageKw = 0;
+
+  if (contractedDemand > 0 && measuredDemand > contractedDemand * 1.05) {
+    demandOverageDetected = true;
+    expectedOverageKw = measuredDemand - contractedDemand;
+
+    if (Number(bill.exceeded_demand_kw || 0) <= 0 && Number(bill.exceeded_demand_fine_brl || 0) <= 0) {
+      warnings.push(
+        `Demanda medida (${measuredDemand} kW) excedeu a tolerância de 5% da contratada (${contractedDemand} kW), mas nenhuma multa/ultrapassagem foi informada no extrato da distribuidora.`
+      );
+    }
+  }
+
+  // 5. Formato do Período de Faturamento (YYYY-MM)
+  if (bill.billing_period && !/^\d{4}-\d{2}$/.test(bill.billing_period)) {
+    warnings.push(
+      `Período de faturamento "${bill.billing_period}" fora do padrão regulatório YYYY-MM (ex: 2024-05).`
+    );
+  }
+
+  // Score de discrepância: 0 (perfeito), aumenta com warnings e errors
+  const discrepancyScore = Math.min(1.0, errors.length * 0.5 + warnings.length * 0.15);
+  const validationStatus =
+    errors.length > 0 ? 'rejected' : warnings.length > 0 ? 'requires_review' : 'verified';
+
+  return {
+    is_valid: errors.length === 0,
+    validation_status: validationStatus,
+    discrepancy_score: Number(discrepancyScore.toFixed(2)),
+    errors,
+    warnings,
+    metrics: {
+      total_calculated_consumption_kwh: totalConsumptionKwh,
+      taxes_total_brl: Number(taxesTotal.toFixed(2)),
+      taxes_percent_of_total: Number(taxesPercent.toFixed(1)),
+      line_items_sum_brl: Number(lineItemsSum.toFixed(2)),
+      demand_overage_detected: demandOverageDetected,
+      expected_overage_kw: Number(expectedOverageKw.toFixed(1))
+    },
+    checked_at: new Date().toISOString()
+  };
+}
+

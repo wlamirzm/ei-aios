@@ -95,3 +95,16 @@ npm test
 | `EMAIL-015` | Thread de e-mail | Preserva contexto (`thread_id`) e deduplicação | ✅ **APROVADO (`IMPLEMENTADO`)** | `extractRfcHeadersFromImapBlock()` extrai `Message-ID`, `In-Reply-To` e `References` (`EMAIL-002 & EMAIL-008 PASS`) |
 | `EMAIL-016` | Dados de cliente | Respeita isolamento e criptografia de credenciais | ✅ **APROVADO (`IMPLEMENTADO`)** | `password_secret` criptografado com `AES-256-GCM` (`SP1-T01`) e contrato `EmailAnalysisContractSchema` validado (`EMAIL-015 PASS`) |
 
+---
+
+## 5. Matriz de Testes Integrados e E2E — Sprint 4 (`INT-001` a `INT-006`) — **6/6 APROVADOS NA SPRINT 4**
+
+| ID | Cenário | Critério de Aceite | Status Atual | Evidência Verificada (`integration-audit.test.ts`) |
+|---|---|---|---|---|
+| `INT-001` | RAG Regulatório `AG-009` | Injeta normas vigentes (`knowledge_sources`) no prompt do especialista | ✅ **APROVADO (`IMPLEMENTADO`)** | `executors.ts` injeta `knowledge_sources` (REN ANEEL 1.000/2021 e tarifas CPFL) (`INT-001 PASS`) |
+| `INT-002` | Integridade de Faturas (Íntegra) | Valida matematicamente grandezas, impostos e ultrapassagem | ✅ **APROVADO (`IMPLEMENTADO`)** | `validateExtractedBillIntegrity()` valida faturas consistentes com status `verified` (`INT-002 PASS`) |
+| `INT-003` | Integridade de Faturas (Inconsistente) | Sinaliza erros em tributos abusivos e somas divergentes | ✅ **APROVADO (`IMPLEMENTADO`)** | `validateExtractedBillIntegrity()` rejeita tributos `> total` com status `rejected` (`INT-003 PASS`) |
+| `INT-004` | Trilha `decision_logs` | Registra decisões estruturadas do `AG-001` no banco | ✅ **APROVADO (`IMPLEMENTADO`)** | `decision_logs` persistido durante decomposição e síntese (`INT-004 PASS`) |
+| `INT-005` | Sync IMAP Agendado | Permite sincronização periódica de e-mails via worker | ✅ **APROVADO (`IMPLEMENTADO`)** | `AutonomousWorker.checkAndTriggerScheduledEmailSync()` configurado por `EMAIL_AUTO_SYNC_MINUTES` (`INT-005 PASS`) |
+| `INT-006` | Pipeline Integrado E2E | Fluxo completo `AG-012` -> `AG-003` -> `AG-004` -> `AG-011` -> `AG-008` -> `AG-001` | ✅ **APROVADO (`IMPLEMENTADO`)** | Triagem, validação, auditoria de energia, FinOps, QA Gate e roteamento integrados (`INT-006 PASS`) |
+
