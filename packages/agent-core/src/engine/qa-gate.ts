@@ -34,11 +34,31 @@ ${JSON.stringify(agentOutput, null, 2)}
 
 DIRETRIZES DE AUDITORIA:
 1. Rastreabilidade Matemática: Se houver valores monetários (R$) ou energéticos (kWh/kW), a memória de cálculo deve estar fundamentada.
-2. Promessas Indevidas: NUNCA permita a expressão "economia garantida". Deve ser sempre "potencial estimado sujeito a medição".
+2. Promessas Indevidas: NUNCA permita a expressão afirmativa "economia garantida". Deve ser sempre "potencial estimado sujeito a medição".
 3. Premissas & Limitações: Devem estar explícitas.
 4. Conformidade Regulatória: Não pode violar as resoluções da ANEEL (especialmente REN 1.000/2021) nem a LGPD.
 
-Se qualquer uma dessas regras falhar, marque approved = false e liste as inconsistências com instruções claras de correção.`;
+Retorne EXCLUSIVAMENTE um JSON válido com estas chaves exatas:
+{
+  "approved": true,
+  "confidence_score": 0.95,
+  "critical_inconsistencies": [],
+  "traceability_check": {
+    "has_deterministic_math_backing": true,
+    "calculation_memory_present": true
+  },
+  "safety_compliance": {
+    "no_false_guarantees": true,
+    "assumptions_declared": true,
+    "limitations_explicit": true,
+    "aneel_ren_1000_compliant": true,
+    "lgpd_compliant": true
+  },
+  "risk_level_evaluated": "${task.risk_level}",
+  "requires_human_approval": ${Boolean(task.requires_approval)},
+  "audit_verdict": "Resumo da auditoria",
+  "correction_instructions": null
+}`;
 
     try {
       const result = await geminiService.generateStructuredContent<QAReview>({

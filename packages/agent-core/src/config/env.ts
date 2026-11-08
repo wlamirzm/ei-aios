@@ -14,8 +14,8 @@ const EnvSchema = z.object({
   WORKER_POLL_INTERVAL_MS: z.coerce.number().default(5000),
   
   GEMINI_API_KEY: z.string().optional().default('mock-key-for-dev'),
-  GEMINI_DEFAULT_FAST_MODEL: z.string().default('gemini-2.5-flash'),
-  GEMINI_DEFAULT_REASONING_MODEL: z.string().default('gemini-2.5-pro'),
+  GEMINI_DEFAULT_FAST_MODEL: z.string().default('gemini-3.5-flash-lite'),
+  GEMINI_DEFAULT_REASONING_MODEL: z.string().default('gemini-3.8-flash'),
   
   SUPABASE_URL: z.string().url().default('http://localhost:54321'),
   SUPABASE_SERVICE_ROLE_KEY: z.string().default('mock-service-role-key'),

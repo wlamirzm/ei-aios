@@ -14,8 +14,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 cd "$ROOT_DIR"
 
-# 1. Garante variáveis de ambiente carregadas
+# 1. Garante variáveis de ambiente carregadas e modelos Gemini atualizados
 if [ -f .env ]; then
+    sed -i 's/^GEMINI_DEFAULT_FAST_MODEL=.*/GEMINI_DEFAULT_FAST_MODEL=gemini-3.5-flash-lite/' .env || true
+    sed -i 's/^GEMINI_DEFAULT_REASONING_MODEL=.*/GEMINI_DEFAULT_REASONING_MODEL=gemini-3.8-flash/' .env || true
     set -a
     source .env
     set +a
@@ -47,15 +49,9 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0002_rls_and_triggers.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/seed.sql
     
-    # Limpa dados transacionais mantendo o catálogo dos 11 agentes e normas ANEEL intactos
+    # Garante permissões e compatibilidade de telemetria sem apagar tarefas existentes do usuário
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "
-      DELETE FROM approvals;
-      DELETE FROM artifacts;
-      DELETE FROM tasks;
-      DELETE FROM energy_bills;
-      DELETE FROM consumer_units;
-      DELETE FROM clients;
-      DELETE FROM agent_runs;
+      ALTER TABLE agent_runs ALTER COLUMN task_id DROP NOT NULL;
       ALTER TABLE agents DISABLE ROW LEVEL SECURITY;
       ALTER TABLE knowledge_sources DISABLE ROW LEVEL SECURITY;
       GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;

@@ -54,6 +54,9 @@ jobs:
             cd /opt/ei-aios
             git fetch origin main
             git reset --hard origin/main
+            if [ -f .env ] && [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+              sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}|" .env || true
+            fi
             bash docker/deploy.sh
             echo "🎉 [CI/CD] Deploy concluído com sucesso!"
 

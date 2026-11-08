@@ -29,6 +29,10 @@ export interface GeminiCallResult<T = any> {
 
 // Preços por 1 milhão de tokens (USD)
 const PRICING_PER_MILLION = {
+  'gemini-3.5-flash-lite': { input: 0.075, output: 0.30 },
+  'gemini-3.1-flash-lite': { input: 0.075, output: 0.30 },
+  'gemini-3.8-flash': { input: 0.15, output: 0.60 },
+  'gemini-4-argon': { input: 1.25, output: 5.00 },
   'gemini-2.5-flash': { input: 0.15, output: 0.60 },
   'gemini-2.0-flash': { input: 0.10, output: 0.40 },
   'gemini-2.5-pro': { input: 1.25, output: 5.00 },
@@ -36,12 +40,31 @@ const PRICING_PER_MILLION = {
 };
 
 export function estimateTokenCost(modelName: string, inputTokens: number, outputTokens: number): number {
-  const modelKey = Object.keys(PRICING_PER_MILLION).find(k => modelName.includes(k)) || 'gemini-2.5-flash';
-  const pricing = PRICING_PER_MILLION[modelKey as keyof typeof PRICING_PER_MILLION] || PRICING_PER_MILLION['gemini-2.5-flash'];
+  const modelKey = Object.keys(PRICING_PER_MILLION).find(k => modelName.includes(k)) || 'gemini-3.5-flash-lite';
+  const pricing = PRICING_PER_MILLION[modelKey as keyof typeof PRICING_PER_MILLION] || PRICING_PER_MILLION['gemini-3.5-flash-lite'];
   
   const inputCost = (inputTokens / 1_000_000) * pricing.input;
   const outputCost = (outputTokens / 1_000_000) * pricing.output;
   return Math.round((inputCost + outputCost) * 1_000_000) / 1_000_000;
+}
+
+function isValidUuid(str?: string): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
+function resolveCandidateModels(requestedModel?: string): string[] {
+  const defaults = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'];
+  if (!requestedModel) return defaults;
+  // Modelos 2.5, 2.0 e 1.5 foram descontinuados para novas chaves na API Gemini
+  if (
+    requestedModel.includes('2.5') ||
+    requestedModel.includes('2.0') ||
+    requestedModel.includes('1.5')
+  ) {
+    return defaults;
+  }
+  return [requestedModel, ...defaults.filter(m => m !== requestedModel)];
 }
 
 const AGENT_PERSONAS: Record<string, { title: string; roleSummary: string; examples: string[] }> = {
@@ -185,7 +208,8 @@ export class GeminiService {
    */
   async generateStructuredContent<T = any>(params: GeminiCallParams): Promise<GeminiCallResult<T>> {
     const startTime = Date.now();
-    const model = params.model || env.GEMINI_DEFAULT_FAST_MODEL;
+    const candidates = resolveCandidateModels(params.model || env.GEMINI_DEFAULT_FAST_MODEL);
+    let modelUsed = candidates[0]!;
     let inputTokens = 0;
     let outputTokens = 0;
     let rawText = '';
@@ -195,7 +219,7 @@ export class GeminiService {
 
     try {
       if (!this.client || this.activeApiKey === 'mock-key-for-dev') {
-        console.warn(`[GeminiService] Running in Specialist Engine mode for ${params.agentId} on model ${model}`);
+        console.warn(`[GeminiService] Running in Specialist Engine mode for ${params.agentId} on model ${modelUsed}`);
         inputTokens = Math.max(120, Math.round(params.prompt.length / 4));
         outputTokens = 250;
         
@@ -230,21 +254,38 @@ export class GeminiService {
           config.responseSchema = params.responseSchema;
         }
 
-        const response = await this.client.models.generateContent({
-          model,
-          contents,
-          config
-        });
+        let lastErr: any = null;
+        let succeeded = false;
 
-        rawText = response.text || '{}';
-        parsedData = JSON.parse(rawText) as T;
+        for (const candidateModel of candidates) {
+          try {
+            modelUsed = candidateModel;
+            const response = await this.client.models.generateContent({
+              model: candidateModel,
+              contents,
+              config
+            });
 
-        if (response.usageMetadata) {
-          inputTokens = response.usageMetadata.promptTokenCount || 0;
-          outputTokens = response.usageMetadata.candidatesTokenCount || 0;
-        } else {
-          inputTokens = Math.round(params.prompt.length / 4);
-          outputTokens = Math.round(rawText.length / 4);
+            rawText = response.text || '{}';
+            parsedData = JSON.parse(rawText) as T;
+
+            if (response.usageMetadata) {
+              inputTokens = response.usageMetadata.promptTokenCount || 0;
+              outputTokens = response.usageMetadata.candidatesTokenCount || 0;
+            } else {
+              inputTokens = Math.round(params.prompt.length / 4);
+              outputTokens = Math.round(rawText.length / 4);
+            }
+            succeeded = true;
+            break;
+          } catch (candidateErr: any) {
+            lastErr = candidateErr;
+            console.warn(`[GeminiService] Candidate model ${candidateModel} failed, trying next:`, candidateErr?.message);
+          }
+        }
+
+        if (!succeeded) {
+          throw lastErr || new Error('All candidate Gemini models failed');
         }
       }
     } catch (err: any) {
@@ -256,28 +297,31 @@ export class GeminiService {
       parsedData = JSON.parse(rawText) as T;
     } finally {
       const executionTimeMs = Date.now() - startTime;
-      const costEstimateUsd = estimateTokenCost(model, inputTokens, outputTokens);
+      const costEstimateUsd = estimateTokenCost(modelUsed, inputTokens, outputTokens);
 
       try {
-        await supabase.from('agent_runs').insert({
-          task_id: params.taskId,
+        const runPayload: Record<string, any> = {
           agent_id: params.agentId,
           model_provider: 'google',
-          model_name: model,
+          model_name: modelUsed,
           input_tokens: inputTokens,
           output_tokens: outputTokens,
           execution_time_ms: executionTimeMs,
           cost_estimate: costEstimateUsd,
           status: callStatus,
           error_message: errorMessage
-        });
+        };
+        if (isValidUuid(params.taskId)) {
+          runPayload.task_id = params.taskId;
+        }
+        await supabase.from('agent_runs').insert(runPayload);
       } catch (dbErr) {
         console.error('[GeminiService] Failed to record agent_run telemetry to Supabase:', dbErr);
       }
     }
 
     const executionTimeMs = Date.now() - startTime;
-    const costEstimateUsd = estimateTokenCost(model, inputTokens, outputTokens);
+    const costEstimateUsd = estimateTokenCost(modelUsed, inputTokens, outputTokens);
 
     return {
       data: parsedData!,
@@ -286,7 +330,7 @@ export class GeminiService {
       outputTokens,
       executionTimeMs,
       costEstimateUsd,
-      modelUsed: model
+      modelUsed
     };
   }
 
@@ -301,7 +345,8 @@ export class GeminiService {
     model?: string;
   }): Promise<{ reply: string; tokensUsed: number; costEstimateUsd: number }> {
     const startTime = Date.now();
-    const model = params.model || env.GEMINI_DEFAULT_FAST_MODEL;
+    const candidates = resolveCandidateModels(params.model || env.GEMINI_DEFAULT_FAST_MODEL);
+    let modelUsed = candidates[0]!;
     let inputTokens = 0;
     let outputTokens = 0;
     let reply = '';
@@ -326,22 +371,39 @@ export class GeminiService {
           parts: [{ text: params.message }]
         });
 
-        const response = await this.client.models.generateContent({
-          model,
-          contents,
-          config: {
-            systemInstruction: params.systemInstruction,
-            temperature: 0.3
-          }
-        });
+        let lastErr: any = null;
+        let succeeded = false;
 
-        reply = response.text || 'Sem resposta do modelo.';
-        if (response.usageMetadata) {
-          inputTokens = response.usageMetadata.promptTokenCount || 0;
-          outputTokens = response.usageMetadata.candidatesTokenCount || 0;
-        } else {
-          inputTokens = Math.round(params.message.length / 4);
-          outputTokens = Math.round(reply.length / 4);
+        for (const candidateModel of candidates) {
+          try {
+            modelUsed = candidateModel;
+            const response = await this.client.models.generateContent({
+              model: candidateModel,
+              contents,
+              config: {
+                systemInstruction: params.systemInstruction,
+                temperature: 0.3
+              }
+            });
+
+            reply = response.text || 'Sem resposta do modelo.';
+            if (response.usageMetadata) {
+              inputTokens = response.usageMetadata.promptTokenCount || 0;
+              outputTokens = response.usageMetadata.candidatesTokenCount || 0;
+            } else {
+              inputTokens = Math.round(params.message.length / 4);
+              outputTokens = Math.round(reply.length / 4);
+            }
+            succeeded = true;
+            break;
+          } catch (candidateErr: any) {
+            lastErr = candidateErr;
+            console.warn(`[GeminiService.chatWithAgent] Candidate ${candidateModel} failed, trying next:`, candidateErr?.message);
+          }
+        }
+
+        if (!succeeded) {
+          throw lastErr || new Error('All candidate Gemini models failed');
         }
       }
     } catch (err: any) {
@@ -352,13 +414,13 @@ export class GeminiService {
     }
 
     const executionTimeMs = Date.now() - startTime;
-    const costEstimateUsd = estimateTokenCost(model, inputTokens, outputTokens);
+    const costEstimateUsd = estimateTokenCost(modelUsed, inputTokens, outputTokens);
 
     try {
       await supabase.from('agent_runs').insert({
         agent_id: params.agentId,
         model_provider: 'google',
-        model_name: model,
+        model_name: modelUsed,
         input_tokens: inputTokens,
         output_tokens: outputTokens,
         execution_time_ms: executionTimeMs,
@@ -374,6 +436,14 @@ export class GeminiService {
       tokensUsed: inputTokens + outputTokens,
       costEstimateUsd
     };
+  }
+
+  public getFallbackDecompositionPlan(objective: string): Record<string, any> {
+    return this.generateMockResponse({
+      taskId: 'fallback-plan',
+      agentId: 'AG-001',
+      prompt: `OBJETIVO MACRO DO FUNDADOR: "${objective}"`
+    });
   }
 
   private async getLiveSystemSnapshot(): Promise<{

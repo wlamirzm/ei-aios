@@ -74,7 +74,13 @@ export async function executeAgentTask(task: TaskModel): Promise<AgentExecutionR
   const finalPrompt = `TAREFA OPERACIONAL EI-AIOS:
 ${JSON.stringify(promptContext, null, 2)}
 
-Por favor, execute o objetivo com rigor técnico absoluto. Retorne exclusivamente JSON válido.`;
+Por favor, execute o objetivo com rigor técnico absoluto.
+Retorne exclusivamente um objeto JSON válido contendo obrigatoriamente:
+- "deliverable_title": título executivo claro do entregável
+- "executive_summary_markdown": relatório técnico completo em formato Markdown (sem usar a expressão proibida "economia garantida")
+- "assumptions": premissas adotadas
+- "limitations": limitações e ressalvas técnicas
+- além dos campos estruturados específicos da sua análise.`;
 
   // 3. Invocação ao Gemini
   const response = await geminiService.generateStructuredContent({
@@ -104,23 +110,34 @@ Por favor, execute o objetivo com rigor técnico absoluto. Retorne exclusivament
       title: `Diagnóstico Energético - ${input.consumer_unit_code || task.task_code}`,
       summary: `Diagnóstico automatizado com potencial de economia de R$ ${deterministicContext.deterministic_audit.total_annual_potential_savings_brl.toLocaleString('pt-BR')}/ano.`,
       contentMarkdown: reportMarkdown,
-      structuredData: deterministicContext.deterministic_audit
+      structuredData: deterministicContext.deterministic_audit,
+      metadata: {
+        created_by_agent: task.assigned_agent_id,
+        task_code: task.task_code
+      }
     });
-  } else if (outputPayload.deliverable_title) {
+  } else {
     const mappedType =
       task.assigned_agent_id === AgentId.AG_007
         ? 'commercial_proposal'
         : task.assigned_agent_id === AgentId.AG_009
         ? 'contest_dossier'
+        : task.assigned_agent_id === AgentId.AG_003
+        ? 'energy_diagnosis'
         : 'strategic_plan';
+
+    const title = outputPayload.deliverable_title || `${task.assigned_agent_id} — ${task.objective.slice(0, 80)}`;
+    const mdBody = outputPayload.executive_summary_markdown
+      ? `${outputPayload.executive_summary_markdown}\n\n---\n### Dados Estruturados (JSON)\n\`\`\`json\n${JSON.stringify(outputPayload, null, 2)}\n\`\`\``
+      : `# ${title}\n\n**Agente Responsável:** ${task.assigned_agent_id}\n**Objetivo:** ${task.objective}\n\n\`\`\`json\n${JSON.stringify(outputPayload, null, 2)}\n\`\`\``;
 
     await createAndSaveArtifact({
       taskId: task.id,
       clientId: task.client_id,
       artifactType: mappedType,
-      title: `${outputPayload.deliverable_title} (${task.task_code})`,
+      title: `${title} (${task.task_code})`,
       summary: `Entregável gerado por ${task.assigned_agent_id} para o objetivo: ${task.objective}`,
-      contentMarkdown: `# ${outputPayload.deliverable_title}\n\n**Agente Responsável:** ${task.assigned_agent_id}\n**Objetivo:** ${task.objective}\n\n\`\`\`json\n${JSON.stringify(outputPayload, null, 2)}\n\`\`\``,
+      contentMarkdown: mdBody,
       structuredData: outputPayload,
       metadata: {
         created_by_agent: task.assigned_agent_id,

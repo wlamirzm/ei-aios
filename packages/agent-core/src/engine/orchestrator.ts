@@ -35,20 +35,40 @@ Workflow sugerido: ${input.workflowCode || 'Não especificado (detectar automati
 Cliente ID: ${input.clientId || 'Nenhum'}
 
 Sua missão como AG-001 (AI Orchestrator):
-1. Analise o objetivo e decomponha em subtarefas atômicas, com dependências claras entre elas.
-2. Atribua cada tarefa ao agente exato:
-   - AG-002: Estratégia de Mercado, ICP e Concorrentes
-   - AG-003: Engenharia Energética e Diagnóstico de Faturas
-   - AG-004: Engenharia de Dados e OCR
-   - AG-005: Desenvolvimento de Software e Migrations
-   - AG-006: Marketing, Conteúdo e Copy B2B
-   - AG-007: Vendas, Propostas Comerciais e LOI
-   - AG-008: Auditoria de Qualidade e Conformidade
-   - AG-009: Regulação ANEEL e Dossiês de Contestação
-   - AG-010: Medição & Verificação (M&V) e Retenção
-   - AG-011: CFO Digital e Precificação
-3. Para tarefas com envio externo, impacto financeiro ou deploy, defina requires_approval = true e risk_level = LEVEL_2_APPROVAL_REQUIRED.
-Retorne rigorosamente no schema JSON.`;
+1. Analise o objetivo e decomponha em 2 a 4 subtarefas atômicas, com dependências claras entre elas.
+2. Atribua cada tarefa EXCLUSIVAMENTE a um destes IDs de agente:
+   - "AG-002": Estratégia de Mercado, ICP e Concorrentes
+   - "AG-003": Engenharia Energética e Diagnóstico de Faturas
+   - "AG-004": Engenharia de Dados e OCR
+   - "AG-005": Desenvolvimento de Software e Migrations
+   - "AG-006": Marketing, Conteúdo e Copy B2B
+   - "AG-007": Vendas, Propostas Comerciais e LOI
+   - "AG-008": Auditoria de Qualidade e Conformidade
+   - "AG-009": Regulação ANEEL e Dossiês de Contestação
+   - "AG-010": Medição & Verificação (M&V) e Retenção
+   - "AG-011": CFO Digital e Precificação
+3. Para tarefas com envio externo, impacto financeiro ou proposta comercial, defina requires_approval = true e risk_level = "LEVEL_2_APPROVAL_REQUIRED".
+4. Retorne EXCLUSIVAMENTE um JSON válido com estas chaves exatas:
+{
+  "macro_objective": "string",
+  "reasoning_summary": "string",
+  "estimated_complexity": "low" | "medium" | "high",
+  "requires_human_gate": true,
+  "decomposed_tasks": [
+    {
+      "task_code": "SUBTASK-001",
+      "assigned_agent_id": "AG-002",
+      "objective": "string (mínimo 10 caracteres)",
+      "task_type": "string",
+      "priority": "P0" | "P1" | "P2" | "P3",
+      "risk_level": "LEVEL_0_AUTO" | "LEVEL_1_SUPERVISED" | "LEVEL_2_APPROVAL_REQUIRED",
+      "dependencies_task_codes": [],
+      "input_payload": {},
+      "requires_approval": false,
+      "approval_reason": "string opcional"
+    }
+  ]
+}`;
 
     const result = await geminiService.generateStructuredContent<OrchestratorPlan>({
       taskId: 'planning-' + Date.now(),
@@ -59,7 +79,10 @@ Retorne rigorosamente no schema JSON.`;
       temperature: 0.2
     });
 
-    const plan = OrchestratorPlanSchema.parse(result.data);
+    const parsedPlan = OrchestratorPlanSchema.safeParse(result.data);
+    const plan: OrchestratorPlan = parsedPlan.success
+      ? parsedPlan.data
+      : OrchestratorPlanSchema.parse(geminiService.getFallbackDecompositionPlan(input.objective));
 
     // 1. Cria a Tarefa-Mãe (Macro Objective)
     const taskCodeRoot = `MACRO-${Date.now().toString().slice(-6)}`;

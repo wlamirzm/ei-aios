@@ -52,6 +52,8 @@ services:
       - NODE_ENV=production
       - PORT=4000
       - GEMINI_API_KEY=${GEMINI_API_KEY:-mock-key-for-dev}
+      - GEMINI_DEFAULT_FAST_MODEL=${GEMINI_DEFAULT_FAST_MODEL:-gemini-3.5-flash-lite}
+      - GEMINI_DEFAULT_REASONING_MODEL=${GEMINI_DEFAULT_REASONING_MODEL:-gemini-3.8-flash}
       - JWT_SECRET=${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
       - SUPABASE_URL=http://postgrest:3000
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjUwMDAwMDAwMH0.ggSddJmlqMhwsk_qnukbkeF-zaoDcpwdE8DZYdlR6no}
