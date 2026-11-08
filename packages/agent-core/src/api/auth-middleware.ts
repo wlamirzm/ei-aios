@@ -131,6 +131,16 @@ export function requireFounderAuth(req: Request, res: Response, next: NextFuncti
     return;
   }
 
+  // Verifica explicitamente autorização de perfil founder_admin
+  if (verification.role !== 'founder_admin') {
+    res.status(403).json({
+      success: false,
+      error: 'Acesso negado. Privilégios de founder_admin são estritamente obrigatórios para esta rota de governança.',
+      role: verification.role
+    });
+    return;
+  }
+
   (req as any).founderAuth = verification;
   next();
 }

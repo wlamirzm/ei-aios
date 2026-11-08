@@ -139,13 +139,17 @@ export async function executeAgentTask(task: TaskModel): Promise<AgentExecutionR
   }
 
   // 2. Constrói o Prompt contextualizado para a Gemini API
+  // Sanitiza o input_payload removendo tokens e metadados internos de orquestração (lease_token)
+  const sanitizedInput = { ...(task.input_payload || {}) };
+  delete sanitizedInput.lease_token;
+
   const promptContext = {
     objective: task.objective,
     task_code: task.task_code,
     task_type: task.task_type,
     priority: task.priority,
     risk_level: task.risk_level,
-    input_payload: input,
+    input_payload: sanitizedInput,
     deterministic_context: deterministicContext
   };
 

@@ -315,6 +315,7 @@ apiRouter.post('/api/v1/approvals/:id/decide', async (req: Request, res: Respons
           retry_count: (approval.task?.retry_count || 0) + 1,
           input_payload: {
             ...(approval.task?.input_payload || {}),
+            lease_token: null,
             founder_rejection_feedback: comments
           }
         })
