@@ -4,6 +4,7 @@
 // ==============================================================================
 
 import { CFODeliverableSchema } from '@ei-aios/shared';
+export * from './finops-ledger-engine.js';
 
 export type CFOMetricStatus = 'verified' | 'estimated' | 'incomplete' | 'not_available';
 

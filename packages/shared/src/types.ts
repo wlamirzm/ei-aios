@@ -251,3 +251,81 @@ export interface KnowledgeSourceModel {
   created_at: string;
 }
 
+// ==============================================================================
+// SPRINT 6 S6-02: FINOPS COST & USAGE LEDGER TYPES
+// ==============================================================================
+
+export type CostReliabilityTier = 'measured' | 'estimated' | 'reconciled' | 'incomplete' | 'unattributed';
+
+export type CostCategory = 'client_attributable' | 'platform_internal' | 'unattributed_legacy' | 'unattributed_orphan';
+
+export interface ModelPricingItem {
+  inputUsdPerMillion: number;
+  outputUsdPerMillion: number;
+  currency: 'USD';
+  effectiveFrom?: string;
+  effectiveUntil?: string;
+}
+
+export interface ModelPricingMatrix {
+  versionId: string;
+  name: string;
+  effectiveDate: string;
+  models: Record<string, ModelPricingItem>;
+  notes?: string;
+}
+
+export interface FinopsLedgerEntry {
+  id: string;
+  run_id: string;
+  task_id?: string | null;
+  agent_id: string;
+  client_id?: string | null;
+  consumer_unit_id?: string | null;
+  execution_id?: string | null;
+  model_name: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  pricing_version: string;
+  cost_usd: number | null;
+  cost_brl: number | null;
+  exchange_rate: number;
+  reliability_tier: CostReliabilityTier;
+  category: CostCategory;
+  origin?: string | null;
+  run_created_at?: string | null;
+  reconciled_at: string;
+  is_reprocessed: boolean;
+  divergence_notes?: string | null;
+  metadata?: Record<string, any>;
+}
+
+export interface FinopsReconciliationSummary {
+  batch_id: string;
+  reconciled_at: string;
+  pricing_version: string;
+  exchange_rate: number;
+  total_processed: number;
+  new_entries_count: number;
+  reprocessed_entries_count: number;
+  skipped_duplicate_count: number;
+  by_category: {
+    client_attributable: { count: number; cost_usd: number; cost_brl: number };
+    platform_internal: { count: number; cost_usd: number; cost_brl: number };
+    unattributed_legacy: { count: number; cost_usd: number; cost_brl: number };
+    unattributed_orphan: { count: number; cost_usd: number; cost_brl: number };
+  };
+  by_reliability_tier: {
+    measured: number;
+    estimated: number;
+    reconciled: number;
+    incomplete: number;
+    unattributed: number;
+  };
+  by_client: Record<string, { count: number; cost_usd: number; cost_brl: number }>;
+  by_agent: Record<string, { count: number; cost_usd: number; cost_brl: number }>;
+  total_tokens: { input: number; output: number; combined: number };
+  total_cost_usd: number;
+  total_cost_brl: number;
+}
+
