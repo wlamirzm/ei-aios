@@ -12,6 +12,7 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().default(4000),
   DOMAIN: z.string().default('energyintel.local'),
   WORKER_POLL_INTERVAL_MS: z.coerce.number().default(5000),
+  TASK_TIMEOUT_MS: z.coerce.number().default(300000), // 5 minutos default
   
   GEMINI_API_KEY: z.string().optional().default('mock-key-for-dev'),
   GEMINI_DEFAULT_FAST_MODEL: z.string().default('gemini-3.5-flash-lite'),
@@ -22,10 +23,14 @@ const EnvSchema = z.object({
   SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_STORAGE_BUCKET: z.string().default('ei-artifacts'),
   
+  EMAIL_SECRET_KEY: z.string().optional(),
+  ADMIN_API_TOKEN: z.string().default('ei-aios-founder-sovereign-v1'),
+  FOUNDER_EMAIL: z.string().default('fundador@energyintelligence.com.br'),
+  FOUNDER_PASSWORD: z.string().default('EI-AIOS-2026!'),
+  
   N8N_WEBHOOK_URL: z.string().url().default('http://localhost:5678/webhook')
 });
 
 export type Env = z.infer<typeof EnvSchema>;
 
 export const env: Env = EnvSchema.parse(process.env);
-
