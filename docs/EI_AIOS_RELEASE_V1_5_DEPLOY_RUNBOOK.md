@@ -100,3 +100,4 @@ curl -I https://app.eiaios.atendezen.com.br
 - Zero erros de migração no log do deploy.
 - Endpoint `GET /api/v1/decisions` respondendo com payload paginado.
 - Nenhuma tarefa presa em `running` além do timeout.
+

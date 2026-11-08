@@ -93,3 +93,4 @@ docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < /opt/ei-aios
   ```sql
   SELECT count(*) FROM tasks WHERE status = 'synthesizing'; -- Deve retornar 0
   ```
+

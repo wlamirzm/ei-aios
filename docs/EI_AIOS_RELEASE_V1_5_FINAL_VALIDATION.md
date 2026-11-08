@@ -129,3 +129,4 @@ Auditamos todos os pontos de manipulação de `input_payload`:
 > A Release v1.5 está tecnicamente comprovada, com rastreabilidade total, sem regressões e com garantias formais de concorrência e idempotência.
 >
 > **Aguardando autorização expressa do fundador para iniciar o merge e deploy.**
+

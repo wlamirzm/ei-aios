@@ -73,3 +73,4 @@ WHERE status = 'running';
            SIM -> Manter em observação
            NÃO -> Escalar para Rollback
 ```
+
