@@ -3,12 +3,19 @@
 // ==============================================================================
 
 import { GoogleGenAI } from '@google/genai';
+import { randomUUID } from 'node:crypto';
 import { env } from './env.js';
 import { supabase } from './supabase.js';
 
 export interface GeminiCallParams {
   taskId: string;
   agentId: string;
+  clientId?: string | null;
+  consumerUnitId?: string | null;
+  executionId?: string | null;
+  isInternal?: boolean;
+  origin?: 'orchestrator' | 'worker' | 'qa_gate' | 'bill_parser' | 'email_intelligence' | 'chat' | 'system';
+  metadata?: Record<string, any>;
   model?: string;
   systemInstruction?: string;
   prompt: string;
@@ -18,6 +25,7 @@ export interface GeminiCallParams {
 }
 
 export interface GeminiCallResult<T = any> {
+  runId: string;
   data: T;
   rawText: string;
   inputTokens: number;
@@ -225,6 +233,8 @@ export class GeminiService {
     let callStatus: 'success' | 'error' = 'success';
     let errorMessage: string | null = null;
 
+    const runId = randomUUID();
+
     try {
       if (!this.client || this.activeApiKey === 'mock-key-for-dev') {
         console.warn(`[GeminiService] Running in Specialist Engine mode for ${params.agentId} on model ${modelUsed}`);
@@ -306,9 +316,11 @@ export class GeminiService {
     } finally {
       const executionTimeMs = Date.now() - startTime;
       const costEstimateUsd = estimateTokenCost(modelUsed, inputTokens, outputTokens);
+      const isInternal = params.isInternal ?? (params.clientId ? false : true);
 
       try {
         const runPayload: Record<string, any> = {
+          id: runId,
           agent_id: params.agentId,
           model_provider: 'google',
           model_name: modelUsed,
@@ -317,12 +329,51 @@ export class GeminiService {
           execution_time_ms: executionTimeMs,
           cost_estimate: costEstimateUsd,
           status: callStatus,
-          error_message: errorMessage
+          error_message: errorMessage,
+          client_id: params.clientId || null
         };
         if (isValidUuid(params.taskId)) {
           runPayload.task_id = params.taskId;
         }
-        await supabase.from('agent_runs').insert(runPayload);
+        if (params.consumerUnitId) {
+          runPayload.consumer_unit_id = params.consumerUnitId;
+        }
+        if (params.executionId) {
+          runPayload.execution_id = params.executionId;
+        }
+        runPayload.is_internal = isInternal;
+        if (params.metadata || params.origin) {
+          runPayload.metadata = {
+            ...(params.metadata || {}),
+            origin: params.origin || 'unknown'
+          };
+        }
+
+        const { error: insertErr } = await supabase.from('agent_runs').insert(runPayload);
+        if (insertErr) {
+          // Fallback para schema v1.5 caso colunas de migration 0008 ainda não estejam presentes no banco
+          const fallbackPayload: Record<string, any> = {
+            id: runId,
+            agent_id: params.agentId,
+            model_provider: 'google',
+            model_name: modelUsed,
+            input_tokens: inputTokens,
+            output_tokens: outputTokens,
+            execution_time_ms: executionTimeMs,
+            cost_estimate: costEstimateUsd,
+            status: callStatus,
+            error_message: errorMessage,
+            client_id: params.clientId || null
+          };
+          if (isValidUuid(params.taskId)) {
+            fallbackPayload.task_id = params.taskId;
+          }
+          try {
+            await supabase.from('agent_runs').insert(fallbackPayload);
+          } catch (fallbackErr) {
+            console.error('[GeminiService] Failed to record fallback agent_run telemetry:', fallbackErr);
+          }
+        }
       } catch (dbErr) {
         console.error('[GeminiService] Failed to record agent_run telemetry to Supabase:', dbErr);
       }
@@ -332,6 +383,7 @@ export class GeminiService {
     const costEstimateUsd = estimateTokenCost(modelUsed, inputTokens, outputTokens);
 
     return {
+      runId,
       data: parsedData!,
       rawText,
       inputTokens,
@@ -427,7 +479,7 @@ export class GeminiService {
     const costEstimateUsd = estimateTokenCost(modelUsed, inputTokens, outputTokens);
 
     try {
-      await supabase.from('agent_runs').insert({
+      const { error: chatInsertErr } = await supabase.from('agent_runs').insert({
         agent_id: params.agentId,
         model_provider: 'google',
         model_name: modelUsed,
@@ -435,8 +487,25 @@ export class GeminiService {
         output_tokens: outputTokens,
         execution_time_ms: executionTimeMs,
         cost_estimate: costEstimateUsd,
-        status: 'success'
+        status: 'success',
+        client_id: null,
+        is_internal: true,
+        metadata: { origin: 'chat' }
       });
+      if (chatInsertErr) {
+        // Fallback para schema v1.5 sem is_internal/metadata
+        await supabase.from('agent_runs').insert({
+          agent_id: params.agentId,
+          model_provider: 'google',
+          model_name: modelUsed,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          execution_time_ms: executionTimeMs,
+          cost_estimate: costEstimateUsd,
+          status: 'success',
+          client_id: null
+        });
+      }
     } catch (err) {
       console.warn('[GeminiService] Could not log chat telemetry:', err);
     }

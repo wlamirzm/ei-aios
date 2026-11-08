@@ -21,6 +21,7 @@ export interface ObjectiveDecompositionInput {
   objective: string;
   priority?: PriorityLevel;
   clientId?: string;
+  consumerUnitId?: string;
   workflowCode?: WorkflowCode;
   createdBy?: string;
 }
@@ -28,9 +29,22 @@ export interface ObjectiveDecompositionInput {
 export class Orchestrator {
   /**
    * Decompõe um objetivo macro enviado pelo fundador em subtarefas atômicas no Supabase,
-   * validando disponibilidade e permissões de cada agente via AgentRouter.
+   * validando disponibilidade e permissões de cada agente via AgentRouter e propagando o contexto (S6-01).
    */
   async decomposeObjective(input: ObjectiveDecompositionInput): Promise<{ parentTaskId: string; plan: OrchestratorPlan }> {
+    // S6-01: Validação de consistência entre cliente e UC
+    if (input.clientId && input.consumerUnitId) {
+      const { data: ucCheck } = await supabase
+        .from('consumer_units')
+        .select('client_id')
+        .eq('id', input.consumerUnitId)
+        .maybeSingle();
+
+      if (ucCheck && ucCheck.client_id !== input.clientId) {
+        throw new Error(`Inconsistência de contexto financeiro: UC ${input.consumerUnitId} não pertence ao cliente ${input.clientId}`);
+      }
+    }
+
     const ag001Def = await getAgentDefinition(AgentId.AG_001);
     const catalogSummary = agentRouter.getActiveCatalogPromptSummary();
 
@@ -38,6 +52,7 @@ export class Orchestrator {
 "${input.objective}"
 Workflow sugerido: ${input.workflowCode || 'Não especificado (detectar automaticamente)'}
 Cliente ID: ${input.clientId || 'Nenhum'}
+Unidade Consumidora ID: ${input.consumerUnitId || 'Nenhuma'}
 
 Sua missão como AG-001 (AI Orchestrator):
 1. Analise o objetivo e decomponha em 2 a 4 subtarefas atômicas, com dependências claras entre elas.
@@ -69,6 +84,11 @@ Sua missão como AG-001 (AI Orchestrator):
     const result = await geminiService.generateStructuredContent<OrchestratorPlan>({
       taskId: 'planning-' + Date.now(),
       agentId: AgentId.AG_001,
+      clientId: input.clientId || null,
+      consumerUnitId: input.consumerUnitId || null,
+      executionId: 'plan_' + Date.now(),
+      isInternal: !input.clientId,
+      origin: 'orchestrator',
       model: ag001Def.model,
       systemInstruction: ag001Def.systemPrompt,
       prompt,
@@ -95,7 +115,11 @@ Sua missão como AG-001 (AI Orchestrator):
         priority: input.priority || PriorityLevel.P1,
         status: 'running',
         risk_level: plan.requires_human_gate ? ActionRiskLevel.LEVEL_2_APPROVAL_REQUIRED : ActionRiskLevel.LEVEL_0_AUTO,
-        input_payload: { raw_objective: input.objective, plan_summary: plan.reasoning_summary },
+        input_payload: {
+          raw_objective: input.objective,
+          plan_summary: plan.reasoning_summary,
+          consumer_unit_id: input.consumerUnitId || null
+        },
         result_payload: plan
       })
       .select('id')
@@ -140,7 +164,7 @@ Sua missão como AG-001 (AI Orchestrator):
           task_code: subtaskCode,
           workflow_code: input.workflowCode || plan.workflow_code || null,
           parent_task_id: parentTaskId,
-          client_id: input.clientId || null,
+          client_id: input.clientId || null, // S6-01: Herança estrita da tarefa-mãe (Regra 3)
           created_by: AgentId.AG_001,
           assigned_agent_id: routeCheck.effectiveAgentId,
           objective: subtask.objective,
@@ -151,6 +175,7 @@ Sua missão como AG-001 (AI Orchestrator):
           dependencies: dependencyIds,
           input_payload: {
             ...(subtask.input_payload || {}),
+            consumer_unit_id: input.consumerUnitId || null, // S6-01: Propagação de UC
             router_validation: routeCheck.reason
           },
           requires_approval: effectiveRequiresApproval,
@@ -314,6 +339,11 @@ Elabore a Síntese Executiva Consolidada do AG-001 retornando um objeto JSON vá
     const synthesis = await geminiService.generateStructuredContent({
       taskId: parentTaskId,
       agentId: AgentId.AG_001,
+      clientId: parentTask.client_id || null,
+      consumerUnitId: parentTask.consumer_unit_id || parentTask.input_payload?.consumer_unit_id || null,
+      executionId: `synthesis_${parentTaskId}_${Date.now()}`,
+      isInternal: !parentTask.client_id,
+      origin: 'orchestrator',
       model: ag001Def.model,
       systemInstruction: ag001Def.systemPrompt,
       prompt,

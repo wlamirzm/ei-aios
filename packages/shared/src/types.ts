@@ -155,6 +155,7 @@ export interface TaskModel {
   workflow_code?: WorkflowCode | string | null;
   parent_task_id?: string | null;
   client_id?: string | null;
+  consumer_unit_id?: string | null;
   created_by: string;
   assigned_agent_id: AgentId | string;
   objective: string;
@@ -178,7 +179,11 @@ export interface TaskModel {
 
 export interface AgentRunModel {
   id: string;
-  task_id: string;
+  task_id?: string | null;
+  client_id?: string | null;
+  consumer_unit_id?: string | null;
+  execution_id?: string | null;
+  is_internal?: boolean;
   agent_id: string;
   model_provider: string;
   model_name: string;
@@ -188,7 +193,20 @@ export interface AgentRunModel {
   cost_estimate: number;
   status: 'success' | 'error' | 'qa_rejected';
   error_message?: string | null;
+  metadata?: Record<string, any>;
   created_at: string;
+}
+
+export interface ExecutionContext {
+  taskId?: string | null;
+  runId?: string;
+  agentId: AgentId | string;
+  clientId?: string | null;
+  consumerUnitId?: string | null;
+  executionId?: string | null;
+  isInternal?: boolean;
+  origin?: 'orchestrator' | 'worker' | 'qa_gate' | 'bill_parser' | 'email_intelligence' | 'chat' | 'system';
+  metadata?: Record<string, any>;
 }
 
 export interface ApprovalModel {

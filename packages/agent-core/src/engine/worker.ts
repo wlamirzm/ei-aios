@@ -3,7 +3,7 @@
 // Sprint 1 - BKL-001 & BKL-005
 // ==============================================================================
 
-import { TaskModel, TaskStatus } from '@ei-aios/shared';
+import { TaskModel, TaskStatus, ExecutionContext } from '@ei-aios/shared';
 import { env } from '../config/env.js';
 import { supabase } from '../config/supabase.js';
 import { policyEngine } from './policy-engine.js';
@@ -267,9 +267,44 @@ export class AutonomousWorker {
   public async processSingleTask(task: TaskModel, leaseToken?: string): Promise<void> {
     console.log(`[AutonomousWorker] Processing task ${task.task_code} (${task.assigned_agent_id})`);
 
+    const executionContext: ExecutionContext = {
+      taskId: task.id,
+      agentId: task.assigned_agent_id,
+      clientId: task.client_id || null,
+      consumerUnitId: task.consumer_unit_id || task.input_payload?.consumer_unit_id || null,
+      executionId: leaseToken || `exec_${task.id}_${Date.now()}`,
+      isInternal: !task.client_id,
+      origin: 'worker'
+    };
+
+    // S6-01: Validação de consistência entre tarefa, cliente e unidade consumidora (Regra 4)
+    if (task.client_id && executionContext.consumerUnitId) {
+      const { data: ucRow } = await supabase
+        .from('consumer_units')
+        .select('client_id')
+        .eq('id', executionContext.consumerUnitId)
+        .maybeSingle();
+
+      if (ucRow && ucRow.client_id !== task.client_id) {
+        console.error(
+          `[AutonomousWorker] Inconsistência de contexto financeiro na tarefa ${task.task_code}: UC ${executionContext.consumerUnitId} pertence ao cliente ${ucRow.client_id}, não ao cliente ${task.client_id}. Execução rejeitada por segurança.`
+        );
+        await supabase
+          .from('tasks')
+          .update({
+            status: TaskStatus.FAILED,
+            result_payload: {
+              error: `Violação de isolamento de contexto (S6-01): Unidade consumidora ${executionContext.consumerUnitId} não pertence ao cliente ${task.client_id}. Operação bloqueada para evitar vazamento ou atribuição indevida de custos.`
+            }
+          })
+          .eq('id', task.id);
+        return;
+      }
+    }
+
     try {
-      // 1. Executa o Agente (com ferramentas determinísticas se aplicável)
-      const execution = await executeAgentTask(task);
+      // 1. Executa o Agente com o contexto propagado (S6-01)
+      const execution = await executeAgentTask(task, executionContext);
 
       // S5-03: Checagem de worker zumbi / expiração de lease antes de salvar resultados
       if (leaseToken) {
@@ -290,7 +325,7 @@ export class AutonomousWorker {
         }
       }
 
-      // 2. Coloca em 'review' e aciona o AG-008 (QA Gate)
+      // 2. Coloca em 'review' e aciona o AG-008 (QA Gate) com o contexto propagado
       await supabase
         .from('tasks')
         .update({
@@ -299,7 +334,7 @@ export class AutonomousWorker {
         })
         .eq('id', task.id);
 
-      const qaResult = await qaGate.auditTaskResult(task, execution.outputPayload);
+      const qaResult = await qaGate.auditTaskResult(task, execution.outputPayload, executionContext);
 
       // 3. Avalia resultado da Auditoria QA
       if (!qaResult.approved) {

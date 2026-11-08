@@ -709,6 +709,9 @@ Retorne EXCLUSIVAMENTE um JSON válido com estas chaves exatas:
     const result = await geminiService.generateStructuredContent<AG012EmailAnalysis>({
       taskId: 'email-analysis-' + Date.now(),
       agentId: AgentId.AG_012,
+      clientId: null,
+      isInternal: true,
+      origin: 'email_intelligence',
       model: ag012Def.model,
       systemInstruction: ag012Def.systemPrompt,
       prompt,

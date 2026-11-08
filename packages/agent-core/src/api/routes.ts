@@ -115,6 +115,7 @@ apiRouter.post('/api/v1/objectives', async (req: Request, res: Response, next: N
       objective: validated.objective,
       priority: validated.priority,
       clientId: validated.client_id,
+      consumerUnitId: validated.consumer_unit_id,
       workflowCode: validated.workflow_code,
       createdBy: 'FOUNDER'
     });
@@ -160,10 +161,13 @@ apiRouter.post(
         return;
       }
 
-      // 2. Extração Multimodal via Gemini / OCR
+      // 2. Extração Multimodal via Gemini / OCR com propagação de contexto do cliente (S6-01)
       const taskIdForOcr = `ocr-${Date.now()}`;
       const extractedData = await parseEnergyBill({
         taskId: taskIdForOcr,
+        clientId: uc.client_id || null,
+        consumerUnitId: uc.id,
+        executionId: `ocr_${Date.now()}`,
         fileBuffer: file?.buffer,
         mimeType: file?.mimetype || 'application/pdf',
         consumerUnitHint: uc.uc_code
