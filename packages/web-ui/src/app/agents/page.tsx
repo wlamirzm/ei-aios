@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Bot,
   Settings2,
@@ -14,9 +14,10 @@ import {
   Send,
   Trash2,
   Sparkles,
-  Loader2
+  Loader2,
+  KeyRound
 } from 'lucide-react';
-import { chatWithAgent, cleanDatabase } from '@/lib/api-client';
+import { chatWithAgent, cleanDatabase, fetchAgents, fetchLlmStatus, setLlmApiKey } from '@/lib/api-client';
 
 interface AgentCard {
   id: string;
@@ -120,44 +121,87 @@ export default function AgentsPage() {
     },
     {
       id: 'AG-009',
-      name: 'Customer Success & Operations Agent',
-      role: 'Onboarding de clientes, coleta contínua de faturas e relatórios periódicos de economia.',
-      model: 'gemini-2.5-flash',
-      temperature: 0.2,
-      daily_budget: 5.00,
-      enabled: true,
-      system_prompt: 'Você é o Customer Success & Operations Agent (AG-009)...'
-    },
-    {
-      id: 'AG-010',
-      name: 'Finance & Compliance Agent',
-      role: 'Apuração de Success Fee, auditoria de devolução em dobro (Art. 323) e DRE.',
-      model: 'gemini-2.5-pro',
-      temperature: 0.0,
-      daily_budget: 8.00,
-      enabled: true,
-      system_prompt: 'Você é o Finance & Compliance Agent (AG-010)...'
-    },
-    {
-      id: 'AG-011',
-      name: 'Legal & Regulatory Agent',
-      role: 'Interpretação da Resolução 1.000 da ANEEL, contratos de success fee e termos LGPD.',
+      name: 'Regulatory & Tariff Intelligence Agent',
+      role: 'Especialista na REN ANEEL 1.000/2021, devolução em dobro (Art. 323), Lei 14.300/2022 e Mercado Livre.',
       model: 'gemini-2.5-pro',
       temperature: 0.1,
       daily_budget: 6.00,
       enabled: true,
-      system_prompt: 'Você é o Consultor Jurídico e Regulatório Setorial (AG-011)...'
+      system_prompt: 'Você é o Regulatory & Tariff Intelligence Agent (AG-009)...'
+    },
+    {
+      id: 'AG-010',
+      name: 'Customer Onboarding & M&V Agent',
+      role: 'Onboarding de clientes, protocolo mensal de Medição e Verificação (M&V) e apuração de Success Fee.',
+      model: 'gemini-2.5-flash',
+      temperature: 0.1,
+      daily_budget: 5.00,
+      enabled: true,
+      system_prompt: 'Você é o Customer Onboarding & M&V Agent (AG-010)...'
+    },
+    {
+      id: 'AG-011',
+      name: 'Startup CFO & Unit Economics Agent',
+      role: 'Gestão financeira da startup, DRE, Unit Economics (CAC, LTV, Churn) e governança FinOps de IA.',
+      model: 'gemini-2.5-pro',
+      temperature: 0.1,
+      daily_budget: 5.00,
+      enabled: true,
+      system_prompt: 'Você é o Startup CFO & Unit Economics Agent (AG-011)...'
     }
   ]);
 
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [cleaning, setCleaning] = useState(false);
+  const [llmConfigured, setLlmConfigured] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [savingKey, setSavingKey] = useState(false);
 
   // Estado do Chat Drawer
   const [activeChatAgent, setActiveChatAgent] = useState<AgentCard | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    fetchLlmStatus()
+      .then((res) => setLlmConfigured(Boolean(res?.configured)))
+      .catch(() => {});
+
+    fetchAgents()
+      .then((res) => {
+        if (res?.agents && res.agents.length > 0) {
+          setAgents(
+            res.agents.map((a: any) => ({
+              id: a.id,
+              name: a.name,
+              role: a.role_description,
+              model: a.configuration?.model || 'gemini-2.5-flash',
+              temperature: a.configuration?.temperature ?? 0.2,
+              daily_budget: a.configuration?.daily_budget_usd ?? 5.0,
+              enabled: a.enabled ?? true,
+              system_prompt: a.system_prompt
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveApiKey = async () => {
+    setSavingKey(true);
+    try {
+      const res = await setLlmApiKey(apiKeyInput);
+      setLlmConfigured(Boolean(res?.configured));
+      setApiKeyInput('');
+      setSavedMsg(res?.message || 'Configuração de motor de IA atualizada!');
+      setTimeout(() => setSavedMsg(null), 5000);
+    } catch (err: any) {
+      alert(`Erro ao salvar chave Gemini: ${err.message}`);
+    } finally {
+      setSavingKey(false);
+    }
+  };
 
   const handleSave = (id: string) => {
     setSavedMsg(`Configurações e prompt do agente ${id} atualizados com sucesso no Postgres!`);
@@ -258,6 +302,45 @@ export default function AgentsPage() {
           <span>{savedMsg}</span>
         </div>
       )}
+
+      {/* MOTOR DE IA: STATUS & CHAVE GEMINI API */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg border ${llmConfigured ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'}`}>
+            <KeyRound className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-white">Motor Cognitivo:</span>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${llmConfigured ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-400' : 'bg-indigo-950/60 border-indigo-500/40 text-indigo-300'}`}>
+                {llmConfigured ? 'GOOGLE GEMINI 2.5 LIVE API' : 'MOTOR ESPECIALISTA CONTEXTUAL EI-AIOS'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {llmConfigured
+                ? 'Conectado diretamente à API oficial Google Gemini 2.5.'
+                : 'Respostas contextuais conectadas ao PostgreSQL em tempo real. Opcionalmente, insira sua GEMINI_API_KEY do Google AI Studio ao lado.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <input
+            type="password"
+            value={apiKeyInput}
+            onChange={(e) => setApiKeyInput(e.target.value)}
+            placeholder="Colar GEMINI_API_KEY (AIza...)"
+            className="w-full md:w-64 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-purple-500"
+          />
+          <button
+            onClick={handleSaveApiKey}
+            disabled={savingKey || !apiKeyInput.trim()}
+            className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap"
+          >
+            {savingKey ? 'Ativando...' : 'Ativar Chave'}
+          </button>
+        </div>
+      </div>
 
       {/* GRADE DOS 11 AGENTES */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

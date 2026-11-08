@@ -116,3 +116,20 @@ export async function fetchArtifacts() {
   if (!res.ok) throw new Error('Falha ao listar artefatos');
   return res.json();
 }
+
+export async function fetchLlmStatus() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/system/llm-status`, { cache: 'no-store' });
+  if (!res.ok) return { configured: false, mode: 'deterministic_specialist_engine' };
+  return res.json();
+}
+
+export async function setLlmApiKey(apiKey: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/system/llm-key`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiKey })
+  });
+  if (!res.ok) throw new Error('Falha ao atualizar chave Gemini API');
+  return res.json();
+}
+

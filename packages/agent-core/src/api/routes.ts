@@ -546,3 +546,26 @@ apiRouter.get('/api/v1/artifacts', async (_req: Request, res: Response, next: Ne
   }
 });
 
+// ------------------------------------------------------------------------------
+// 13. GET & POST /api/v1/system/llm-key (Status e Configuração Dinâmica Gemini)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/system/llm-status', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    ...geminiService.getStatus()
+  });
+});
+
+apiRouter.post('/api/v1/system/llm-key', (req: Request, res: Response) => {
+  const { apiKey } = req.body || {};
+  const result = geminiService.setApiKey(apiKey || '');
+  res.json({
+    success: true,
+    ...result,
+    message: result.configured
+      ? 'Chave Google Gemini API ativada com sucesso em produção!'
+      : 'Modo Especialista Determinístico EI-AIOS ativado.'
+  });
+});
+
+
