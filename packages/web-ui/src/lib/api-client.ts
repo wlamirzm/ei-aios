@@ -16,6 +16,39 @@ function getBaseUrl(): string {
   return envUrl || 'https://api.eiaios.atendezen.com.br';
 }
 
+function getAuthHeaders(includeJsonContentType = true): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (includeJsonContentType) {
+    headers['Content-Type'] = 'application/json';
+  }
+  const adminToken = process.env.NEXT_PUBLIC_ADMIN_API_TOKEN || 'ei-aios-founder-sovereign-v1';
+  headers['X-EI-Admin-Token'] = adminToken;
+
+  if (typeof window !== 'undefined') {
+    const storedJwt = window.localStorage.getItem('eiaios_founder_token');
+    if (storedJwt) {
+      headers['Authorization'] = `Bearer ${storedJwt}`;
+    }
+  }
+  return headers;
+}
+
+export async function loginFounder(email: string, password: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error || 'Credenciais inválidas');
+  }
+  if (typeof window !== 'undefined' && data?.token) {
+    window.localStorage.setItem('eiaios_founder_token', data.token);
+  }
+  return data;
+}
+
 export async function fetchFinOpsMetrics() {
   const res = await fetch(`${getBaseUrl()}/api/v1/metrics/finops`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Falha ao buscar métricas de FinOps');
@@ -31,7 +64,7 @@ export async function fetchWorkerStatus() {
 export async function triggerWorkerCycle() {
   const res = await fetch(`${getBaseUrl()}/api/v1/worker/trigger`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify({ force_cycle: true })
   });
   if (!res.ok) throw new Error('Falha ao forçar ciclo do Worker');
@@ -41,7 +74,7 @@ export async function triggerWorkerCycle() {
 export async function createObjective(objective: string, priority = 'P1', clientId?: string, workflowCode?: string) {
   const res = await fetch(`${getBaseUrl()}/api/v1/objectives`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify({ objective, priority, client_id: clientId, workflow_code: workflowCode })
   });
   if (!res.ok) {
@@ -54,7 +87,7 @@ export async function createObjective(objective: string, priority = 'P1', client
 export async function decideApproval(approvalId: string, decision: 'approved' | 'rejected', comments?: string) {
   const res = await fetch(`${getBaseUrl()}/api/v1/approvals/${approvalId}/decide`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify({ decision, comments })
   });
   if (!res.ok) throw new Error('Falha ao registrar decisão de aprovação');
@@ -68,6 +101,7 @@ export async function uploadEnergyBill(consumerUnitId: string, file: File) {
 
   const res = await fetch(`${getBaseUrl()}/api/v1/energy/upload-bill`, {
     method: 'POST',
+    headers: getAuthHeaders(false),
     body: formData
   });
   if (!res.ok) throw new Error('Falha no upload da fatura');
@@ -77,17 +111,37 @@ export async function uploadEnergyBill(consumerUnitId: string, file: File) {
 export async function chatWithAgent(agentId: string, message: string, history?: Array<{ role: 'user' | 'model'; text: string }>) {
   const res = await fetch(`${getBaseUrl()}/api/v1/agents/${agentId}/chat`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify({ message, history })
   });
   if (!res.ok) throw new Error('Falha ao conversar com o agente');
   return res.json();
 }
 
+export async function updateAgentConfig(
+  agentId: string,
+  payload: {
+    system_prompt?: string;
+    enabled?: boolean;
+    model?: string;
+    temperature?: number;
+    daily_budget_usd?: number;
+  }
+) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/agents/${agentId}`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao salvar configuração do agente no PostgreSQL');
+  return data;
+}
+
 export async function cleanDatabase() {
   const res = await fetch(`${getBaseUrl()}/api/v1/system/clean-database`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
+    headers: getAuthHeaders(true)
   });
   if (!res.ok) throw new Error('Falha ao limpar base de dados');
   return res.json();
@@ -106,7 +160,10 @@ export async function fetchTasks() {
 }
 
 export async function fetchApprovals() {
-  const res = await fetch(`${getBaseUrl()}/api/v1/approvals`, { cache: 'no-store' });
+  const res = await fetch(`${getBaseUrl()}/api/v1/approvals`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(false)
+  });
   if (!res.ok) throw new Error('Falha ao listar aprovações');
   return res.json();
 }
@@ -118,7 +175,10 @@ export async function fetchArtifacts() {
 }
 
 export async function fetchLlmStatus() {
-  const res = await fetch(`${getBaseUrl()}/api/v1/system/llm-status`, { cache: 'no-store' });
+  const res = await fetch(`${getBaseUrl()}/api/v1/system/llm-status`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(false)
+  });
   if (!res.ok) return { configured: false, mode: 'deterministic_specialist_engine' };
   return res.json();
 }
@@ -126,7 +186,7 @@ export async function fetchLlmStatus() {
 export async function setLlmApiKey(apiKey: string) {
   const res = await fetch(`${getBaseUrl()}/api/v1/system/llm-key`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify({ apiKey })
   });
   if (!res.ok) throw new Error('Falha ao atualizar chave Gemini API');
@@ -134,7 +194,10 @@ export async function setLlmApiKey(apiKey: string) {
 }
 
 export async function fetchEmailAccounts() {
-  const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts`, { cache: 'no-store' });
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(false)
+  });
   if (!res.ok) throw new Error('Falha ao listar contas de e-mail');
   return res.json();
 }
@@ -151,7 +214,7 @@ export async function createEmailAccount(payload: {
 }) {
   const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify(payload)
   });
   if (!res.ok) {
@@ -171,7 +234,7 @@ export async function updateEmailAccount(
 ) {
   const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts/${id}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify(payload)
   });
   if (!res.ok) throw new Error('Falha ao atualizar modo da conta de e-mail');
@@ -180,7 +243,8 @@ export async function updateEmailAccount(
 
 export async function deleteEmailAccount(id: string) {
   const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts/${id}`, {
-    method: 'DELETE'
+    method: 'DELETE',
+    headers: getAuthHeaders(false)
   });
   if (!res.ok) throw new Error('Falha ao excluir conta de e-mail');
   return res.json();
@@ -189,17 +253,17 @@ export async function deleteEmailAccount(id: string) {
 export async function syncEmailAccount(id: string) {
   const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts/${id}/sync`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
+    headers: getAuthHeaders(true)
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || 'Falha ao sincronizar IMAP HostGator');
   return data;
 }
 
-export async function simulateIncomingEmail(id: string, scenario: 'bill' | 'regulatory' = 'bill') {
+export async function simulateIncomingEmail(id: string, scenario: 'bill' | 'regulatory' | 'prompt_injection' = 'bill') {
   const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts/${id}/simulate`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(true),
     body: JSON.stringify({ scenario })
   });
   if (!res.ok) throw new Error('Falha ao simular e-mail');
@@ -208,7 +272,10 @@ export async function simulateIncomingEmail(id: string, scenario: 'bill' | 'regu
 
 export async function fetchEmailMessages(accountId?: string) {
   const q = accountId ? `?account_id=${encodeURIComponent(accountId)}` : '';
-  const res = await fetch(`${getBaseUrl()}/api/v1/emails/messages${q}`, { cache: 'no-store' });
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/messages${q}`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(false)
+  });
   if (!res.ok) throw new Error('Falha ao listar mensagens de e-mail');
   return res.json();
 }
@@ -216,10 +283,8 @@ export async function fetchEmailMessages(accountId?: string) {
 export async function executeEmailNextStep(messageId: string) {
   const res = await fetch(`${getBaseUrl()}/api/v1/emails/messages/${messageId}/execute-next-step`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
+    headers: getAuthHeaders(true)
   });
   if (!res.ok) throw new Error('Falha ao disparar próximo passo');
   return res.json();
 }
-
-

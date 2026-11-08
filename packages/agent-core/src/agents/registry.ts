@@ -1,9 +1,16 @@
 // ==============================================================================
-// AGENT REGISTRY: METADATA, PROMPTS & RUNTIME LOOKUP
+// AGENT REGISTRY: METADATA, PROMPTS, PERMISSIONS & RUNTIME LOOKUP (BKL-005)
 // ==============================================================================
 
 import { AgentId } from '@ei-aios/shared';
 import { supabase } from '../config/supabase.js';
+
+export interface AgentPermissions {
+  database_read: boolean;
+  database_write: boolean;
+  external_publish: boolean;
+  financial_commitment: boolean;
+}
 
 export interface AgentDefinition {
   id: AgentId;
@@ -14,6 +21,9 @@ export interface AgentDefinition {
   systemPrompt: string;
   dailyBudgetUsd: number;
   approvalRequiredActions: string[];
+  enabled: boolean;
+  tools: string[];
+  permissions: AgentPermissions;
 }
 
 export const DEFAULT_AGENT_REGISTRY: Record<AgentId, AgentDefinition> = {
@@ -21,11 +31,19 @@ export const DEFAULT_AGENT_REGISTRY: Record<AgentId, AgentDefinition> = {
     id: AgentId.AG_001,
     name: 'CEO / AI Orchestrator',
     agentType: 'orchestrator',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3.8-flash',
     temperature: 0.2,
     dailyBudgetUsd: 15.00,
     approvalRequiredActions: ['external_publish', 'financial_commitment'],
-    systemPrompt: `Você é o AI Orchestrator (AG-001) da Energy Intelligence. Sua responsabilidade é coordenar uma equipe de 10 agentes especializados (AG-002 a AG-011) para apoiar o fundador solo na criação, desenvolvimento, análise energética, comercialização e operação da startup.
+    enabled: true,
+    tools: ['task_router', 'workflow_planner', 'executive_synthesizer'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
+    systemPrompt: `Você é o AI Orchestrator (AG-001) da Energy Intelligence. Sua responsabilidade é coordenar uma equipe de 11 agentes especializados (AG-002 a AG-012) para apoiar o fundador solo na criação, desenvolvimento, análise energética, comercialização, triagem executiva de e-mails e operação da startup.
 Regras:
 1. Interprete o objetivo do fundador e decomponha em tarefas atômicas e sequenciais.
 2. Atribua cada tarefa ao agente exato e defina as dependências (quais tarefas precisam terminar antes).
@@ -36,10 +54,18 @@ Regras:
     id: AgentId.AG_002,
     name: 'Business Strategy Agent',
     agentType: 'strategy',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3.8-flash',
     temperature: 0.3,
     dailyBudgetUsd: 8.00,
     approvalRequiredActions: [],
+    enabled: true,
+    tools: ['market_analyzer', 'swot_generator', 'icp_scorer'],
+    permissions: {
+      database_read: true,
+      database_write: false,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Business Strategy Agent (AG-002) da Energy Intelligence. Sua função é inteligência de mercado, definição e refinamento do ICP (PMEs multiunidade, indústrias, condomínios, comercializadoras), análise de concorrentes, modelagem de negócios (SaaS, consultoria, white-label, success fee) e avaliação de oportunidades em Open Energy, Mercado Livre e Geração Cooperada.
 Sempre explicite hipóteses, fontes, riscos de mercado e métricas de validação.`
   },
@@ -47,10 +73,18 @@ Sempre explicite hipóteses, fontes, riscos de mercado e métricas de validaçã
     id: AgentId.AG_003,
     name: 'Energy Specialist Agent',
     agentType: 'energy_engineering',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3.8-flash',
     temperature: 0.1,
     dailyBudgetUsd: 12.00,
     approvalRequiredActions: ['official_technical_report'],
+    enabled: true,
+    tools: ['energy_calculator', 'tariff_simulator'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Especialista Técnico em Energia Elétrica e Inteligência Energética (AG-003) da Energy Intelligence.
 Seu objetivo é transformar dados extraídos de contas de energia, medições e contratos em diagnósticos precisos para redução de custos e eficiência operacional.
 REGRAS OBRIGATÓRIAS:
@@ -63,20 +97,36 @@ REGRAS OBRIGATÓRIAS:
     id: AgentId.AG_004,
     name: 'AI & Data Engineering Agent',
     agentType: 'data_engineering',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.5-flash-lite',
     temperature: 0.0,
     dailyBudgetUsd: 5.00,
     approvalRequiredActions: [],
+    enabled: true,
+    tools: ['bill_parser', 'data_validator'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Engenheiro de Dados e IA (AG-004) da Energy Intelligence. Sua responsabilidade é estruturar dados brutos de faturas de energia, validar a integridade dos campos extraídos via OCR multimodal, detectar anomalias estatísticas de consumo, checar se a soma dos itens da fatura bate com o valor total cobrado e preparar datasets limpos para o AG-003 e AG-010.`
   },
   [AgentId.AG_005]: {
     id: AgentId.AG_005,
     name: 'Software Development Agent',
     agentType: 'engineering',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3.8-flash',
     temperature: 0.1,
     dailyBudgetUsd: 10.00,
     approvalRequiredActions: ['production_deploy', 'schema_migration'],
+    enabled: true,
+    tools: ['code_generator', 'schema_designer'],
+    permissions: {
+      database_read: true,
+      database_write: false,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Engenheiro de Software Sênior (AG-005) da Energy Intelligence. Sua responsabilidade é especificar arquiteturas, propor migrations SQL, criar componentes Next.js, desenvolver conectores de API e documentar alterações técnicas.
 Restrições: Nunca executar alterações estruturais em produção ou expor segredos sem aprovação explícita Nível 2 do fundador.`
   },
@@ -84,20 +134,36 @@ Restrições: Nunca executar alterações estruturais em produção ou expor seg
     id: AgentId.AG_006,
     name: 'Marketing & Growth Agent',
     agentType: 'marketing',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.5-flash-lite',
     temperature: 0.4,
     dailyBudgetUsd: 5.00,
     approvalRequiredActions: ['external_social_post', 'public_campaign'],
+    enabled: true,
+    tools: ['copywriter', 'campaign_planner'],
+    permissions: {
+      database_read: true,
+      database_write: false,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Especialista em Marketing B2B e Growth (AG-006) da Energy Intelligence. Sua função é criar posicionamento de autoridade no setor elétrico, produzir artigos técnicos, posts para LinkedIn, estrutura de landing pages de alta conversão para diagnóstico energético e campanhas de geração de demanda. Nunca prometa reduções irreais ou garantidas sem base técnica.`
   },
   [AgentId.AG_007]: {
     id: AgentId.AG_007,
     name: 'Sales Agent',
     agentType: 'sales',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.5-flash-lite',
     temperature: 0.3,
     dailyBudgetUsd: 6.00,
     approvalRequiredActions: ['external_proposal_delivery', 'commercial_commitment'],
+    enabled: true,
+    tools: ['proposal_generator', 'lead_qualifier', 'loi_builder'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Especialista Comercial B2B (AG-007) da Energy Intelligence. Sua função é qualificar leads dentro do ICP, preparar dossiês pré-reunião, redigir abordagens consultivas personalizadas, elaborar propostas comerciais e Cartas de Intenção (LOI) para pilotos.
 Restrições: Respeitar integralmente a LGPD, nunca enviar comunicações externas ou assumir compromissos de preço sem aprovação do fundador.`
   },
@@ -105,12 +171,20 @@ Restrições: Respeitar integralmente a LGPD, nunca enviar comunicações extern
     id: AgentId.AG_008,
     name: 'Quality & Risk Agent (Auditor QA)',
     agentType: 'qa_audit',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3.8-flash',
     temperature: 0.0,
     dailyBudgetUsd: 12.00,
     approvalRequiredActions: [],
+    enabled: true,
+    tools: ['qa_validator', 'math_consistency_checker', 'compliance_scanner'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Auditor de Qualidade, Conformidade e Risco (AG-008) da Energy Intelligence.
-Todo entregável produzido pelos agentes AG-002 a AG-011 passa obrigatoriamente pelo seu crivo antes de ir para o fundador.
+Todo entregável produzido pelos agentes AG-002 a AG-012 passa obrigatoriamente pelo seu crivo antes de ir para o fundador.
 Critérios de reprovação imediata (approved = false):
 1. Presença de números financeiros ou energéticos sem memória de cálculo rastreável.
 2. Promessa de "economia garantida" sem ressalvas técnicas e contratuais.
@@ -122,10 +196,18 @@ Retorne um parecer rigoroso com lista de inconsistências, nível de criticidade
     id: AgentId.AG_009,
     name: 'Regulatory & Tariff Intelligence Agent',
     agentType: 'regulatory',
-    model: 'gemini-2.5-pro',
+    model: 'gemini-3.8-flash',
     temperature: 0.1,
     dailyBudgetUsd: 8.00,
     approvalRequiredActions: ['legal_petition_delivery'],
+    enabled: true,
+    tools: ['aneel_rag', 'dossier_writer'],
+    permissions: {
+      database_read: true,
+      database_write: false,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Especialista em Regulação do Setor Elétrico Brasileiro (AG-009). Você domina a Resolução Normativa ANEEL nº 1.000/2021, a Lei 14.300/2022 (Marco Legal da Geração Distribuída), regras de comercialização da CCEE (Mercado Livre) e estruturas tarifárias (TUSD/TE, bandeiras tarifárias, tolerância de 5% de ultrapassagem de demanda, cobrança em dobro de devolução de valores faturados a maior).
 Sua missão é fundamentar juridicamente e regulatoriamente os diagnósticos e dossiês de contestação de faturas.`
   },
@@ -133,10 +215,18 @@ Sua missão é fundamentar juridicamente e regulatoriamente os diagnósticos e d
     id: AgentId.AG_010,
     name: 'Customer Onboarding & M&V Agent',
     agentType: 'customer_success',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.5-flash-lite',
     temperature: 0.1,
     dailyBudgetUsd: 6.00,
     approvalRequiredActions: ['monthly_billing_report'],
+    enabled: true,
+    tools: ['mv_calculator', 'retention_monitor'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Agente de Sucesso do Cliente e Medição & Verificação (AG-010). Sua responsabilidade é garantir que todas as unidades consumidoras tenham suas faturas coletadas mensalmente e comprovar matematicamente (usando a ferramenta mv-calculator) a economia real verificada após a implementação das recomendações da Energy Intelligence, gerando relatórios executivos de retenção e base para cobrança de success fee.`
   },
   [AgentId.AG_011]: {
@@ -147,6 +237,14 @@ Sua missão é fundamentar juridicamente e regulatoriamente os diagnósticos e d
     temperature: 0.1,
     dailyBudgetUsd: 6.00,
     approvalRequiredActions: ['financial_rebalance'],
+    enabled: true,
+    tools: ['finops_calculator', 'saas_metrics'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o CFO Digital e Especialista em Unit Economics (AG-011) da Energy Intelligence. Sua função é monitorar a saúde financeira da startup: calcular MRR, ARPA, CAC, LTV, Payback, margem bruta por cliente (descontando custos de tokens de IA registrados em agent_runs) e estruturar simulações de precificação (SaaS vs Implantação vs Success Fee).`
   },
   [AgentId.AG_012]: {
@@ -157,6 +255,14 @@ Sua missão é fundamentar juridicamente e regulatoriamente os diagnósticos e d
     temperature: 0.2,
     dailyBudgetUsd: 6.00,
     approvalRequiredActions: ['external_email_send'],
+    enabled: true,
+    tools: ['imap_reader', 'next_step_analyzer', 'task_dispatcher'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
     systemPrompt: `Você é o Agente de Inteligência de E-mails e Próximo Passo Executivo (AG-012) da Energy Intelligence. Sua responsabilidade é monitorar múltiplas caixas de e-mail corporativas (HostGator cPanel IMAP/SMTP), resumir mensagens recebidas, classificar urgência (P0 a P3), recomendar o próximo passo estratégico, redigir minutas de resposta executiva e, quando a conta estiver configurada em modo de Ação Automática (auto_action), acionar imediatamente o agente especialista correspondente (AG-003 para faturas de energia, AG-007 para leads comerciais, AG-009 para demandas regulatórias ANEEL).`
   }
 };
@@ -183,10 +289,17 @@ export async function getAgentDefinition(agentId: AgentId | string): Promise<Age
       temperature: data.configuration?.temperature ?? fallback.temperature,
       systemPrompt: data.system_prompt || fallback.systemPrompt,
       dailyBudgetUsd: data.configuration?.daily_budget_usd || fallback.dailyBudgetUsd,
-      approvalRequiredActions: data.configuration?.approval_required || fallback.approvalRequiredActions
+      approvalRequiredActions: data.configuration?.approval_required || fallback.approvalRequiredActions,
+      enabled: data.enabled !== undefined ? Boolean(data.enabled) : fallback.enabled,
+      tools: Array.isArray(data.configuration?.tools) ? data.configuration.tools : fallback.tools,
+      permissions: {
+        database_read: data.configuration?.permissions?.database_read ?? fallback.permissions.database_read,
+        database_write: data.configuration?.permissions?.database_write ?? fallback.permissions.database_write,
+        external_publish: data.configuration?.permissions?.external_publish ?? fallback.permissions.external_publish,
+        financial_commitment: data.configuration?.permissions?.financial_commitment ?? fallback.permissions.financial_commitment
+      }
     };
   } catch {
     return fallback;
   }
 }
-

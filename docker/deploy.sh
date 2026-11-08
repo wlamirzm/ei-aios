@@ -44,21 +44,23 @@ echo "🗄️ Inicializando banco de dados e catálogo dos 11 agentes..."
 sleep 5
 POSTGRES_CONTAINER=$(docker ps -q --filter "label=com.docker.swarm.service.name=ei-aios_postgres" | head -n 1)
 if [ -n "$POSTGRES_CONTAINER" ]; then
+    echo "Criando backup preventivo do PostgreSQL (/opt/ei-aios/backup_pre_sprint1.sql)..."
+    docker exec "$POSTGRES_CONTAINER" pg_dump -U postgres postgres > /opt/ei-aios/backup_pre_sprint1.sql 2>/dev/null || true
+
     echo "Executando migrações no contêiner PostgreSQL ($POSTGRES_CONTAINER)..."
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0001_core_schema.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0002_rls_and_triggers.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/seed.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0003_sprint1_security_rls.sql
     
-    # Garante permissões e compatibilidade de telemetria sem apagar tarefas existentes do usuário
+    # Garante permissões e compatibilidade de telemetria sem conceder escrita para anon
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "
       ALTER TABLE agent_runs ALTER COLUMN task_id DROP NOT NULL;
       ALTER TABLE agents DISABLE ROW LEVEL SECURITY;
       ALTER TABLE knowledge_sources DISABLE ROW LEVEL SECURITY;
-      ALTER TABLE email_accounts DISABLE ROW LEVEL SECURITY;
-      ALTER TABLE email_messages DISABLE ROW LEVEL SECURITY;
       GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
-      GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
-      GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role, postgres;
+      GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated, service_role, postgres;
+      GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role, postgres;
       GRANT anon, authenticated, service_role TO postgres;
     "
 

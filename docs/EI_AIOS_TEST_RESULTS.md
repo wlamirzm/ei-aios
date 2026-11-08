@@ -13,7 +13,7 @@ Comando executado:
 npm test
 ```
 
-### 1.1 Resultados Obtidos (`10/10 APROVADOS` — `245.68 ms`)
+### 1.1 Resultados Obtidos (`18/18 APROVADOS` — Calculadoras + Suíte de Segurança e Orquestração da Sprint 1)
 
 | ID | Suíte / Arquivo | Cenário Testado | Resultado Esperado | Resultado Obtido | Status |
 |---|---|---|---|---|---|
@@ -27,6 +27,14 @@ npm test
 | `UT-08` | `mv-calculator.test.ts` | `calculateMeasurementAndVerification()` — Custo evitado positivo e Success Fee | `is_verified_positive_saving = true` e apuração percentual do Success Fee | Custo evitado e Success Fee exatos (`28.96ms`) | ✅ **PASS** |
 | `UT-09` | `mv-calculator.test.ts` | `calculateMeasurementAndVerification()` — Economia zero ou negativa | `success_fee_due_brl = 0` quando não há economia positiva | `success_fee_due_brl = 0` (`0.28ms`) | ✅ **PASS** |
 | `UT-10` | `mv-calculator.test.ts` | `calculateMeasurementAndVerification()` — Cenário real de redução de demanda + reativo | Apuração líquida (`net_client_savings_brl`) descontando Success Fee | Cálculo validado (`0.21ms`) | ✅ **PASS** |
+| `SP1-T01` | `sprint1-security-orchestrator.test.ts` | `BKL-002`: Criptografia `AES-256-GCM` (`encryptSecret` / `decryptSecret`) e detecção de adulteração de `authTag` | Formato `enc:v1:<iv>:<tag>:<cipher>`, idempotência e erro em adulteração | Roundtrip exato e bloqueio de adulteração validados | ✅ **PASS** |
+| `SP1-T02` | `sprint1-security-orchestrator.test.ts` | `BKL-002`: Compatibilidade retroativa e migração transparente de senhas legadas | Senha legada não quebra leitura antes da migração | Compatibilidade validada | ✅ **PASS** |
+| `SP1-T03` | `sprint1-security-orchestrator.test.ts` | `BKL-003`: Bloqueio de Prompt Injection e Spoofing no `AG-012` (`inspectEmailSecurityRisks`) | Detecta override de instruções/exfiltração, força `P0` e bloqueia `auto_action` | Ataque interceptado e classificado como alerta de segurança | ✅ **PASS** |
+| `SP1-T04` | `sprint1-security-orchestrator.test.ts` | `BKL-003`: E-mail comercial/energético legítimo passa sem falso positivo | `isSuspicious = false`, `reasons.length = 0` | Passagem limpa validada | ✅ **PASS** |
+| `SP1-T05` | `sprint1-security-orchestrator.test.ts` | `BKL-004`: Middleware `requireFounderAuth` bloqueia requisições sem credencial | Retorna `HTTP 401 Unauthorized` e `nextCalled = false` | Bloqueio `401` confirmado | ✅ **PASS** |
+| `SP1-T06` | `sprint1-security-orchestrator.test.ts` | `BKL-004`: Middleware `requireFounderAuth` autoriza token JWT assinado válido | `verifyFounderAuthToken` válido e `nextCalled = true` | Autorização confirmada | ✅ **PASS** |
+| `SP1-T07` | `sprint1-security-orchestrator.test.ts` | `BKL-005`: `AgentRouter` valida agentes ativos (`AG-003`, `AG-012`) e permissões | `allowed = true`, `escalatedToOrchestrator = false` | Roteamento determinístico confirmado | ✅ **PASS** |
+| `SP1-T08` | `sprint1-security-orchestrator.test.ts` | `BKL-005`: `AgentRouter` escala agentes inexistentes ou desabilitados para `AG-001` | `allowed = false`, `escalatedToOrchestrator = true`, `effectiveAgentId = 'AG-001'` | Escalonamento seguro ao `AG-001` confirmado | ✅ **PASS** |
 
 ---
 

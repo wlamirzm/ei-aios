@@ -1,5 +1,6 @@
 // ==============================================================================
-// AUTONOMOUS BACKGROUND WORKER: CONTINUOUS POLLING & EXECUTION LOOP
+// AUTONOMOUS BACKGROUND WORKER: CONTINUOUS POLLING, PARALLEL DAG & RECOVERY
+// Sprint 1 - BKL-001 & BKL-005
 // ==============================================================================
 
 import { TaskModel, TaskStatus } from '@ei-aios/shared';
@@ -55,7 +56,8 @@ export class AutonomousWorker {
   }
 
   /**
-   * Ciclo principal: busca tarefas elegíveis, executa, roda QA Gate e decide destino.
+   * Ciclo principal: recupera tarefas expiradas, reconcilia objetivos macro,
+   * busca tarefas elegíveis e executa subtarefas independentes em paralelo.
    */
   private async pollAndExecute(): Promise<{ processedCount: number }> {
     if (this.isProcessingCycle) {
@@ -66,6 +68,10 @@ export class AutonomousWorker {
     let processedCount = 0;
 
     try {
+      // 0. Recuperação de tarefas presas por timeout e reconciliação de tarefas-mãe
+      await this.recoverStuckTasks().catch(() => {});
+      await this.reconcileCompletedParentObjectives().catch(() => {});
+
       // 1. Busca tarefas com status = 'pending'
       const { data: pendingTasks, error } = await supabase
         .from('tasks')
@@ -78,6 +84,8 @@ export class AutonomousWorker {
       if (error || !pendingTasks || pendingTasks.length === 0) {
         return { processedCount: 0 };
       }
+
+      const readyTasks: TaskModel[] = [];
 
       for (const rawTask of pendingTasks) {
         const task = rawTask as TaskModel;
@@ -95,7 +103,7 @@ export class AutonomousWorker {
           continue;
         }
 
-        // 4. Marca status = 'running'
+        // 4. Marca status = 'running' antes de disparar em paralelo
         await supabase
           .from('tasks')
           .update({
@@ -104,8 +112,13 @@ export class AutonomousWorker {
           })
           .eq('id', task.id);
 
-        processedCount++;
-        await this.processSingleTask(task);
+        readyTasks.push(task);
+      }
+
+      if (readyTasks.length > 0) {
+        processedCount = readyTasks.length;
+        // Execução paralela controlada de todas as subtarefas independentes prontas (BKL-005)
+        await Promise.allSettled(readyTasks.map(task => this.processSingleTask(task)));
       }
     } catch (cycleErr) {
       console.error('[AutonomousWorker] Error in pollAndExecute:', cycleErr);
@@ -114,6 +127,79 @@ export class AutonomousWorker {
     }
 
     return { processedCount };
+  }
+
+  /**
+   * Recupera subtarefas que ficaram presas em 'running' além do TASK_TIMEOUT_MS (BKL-005).
+   */
+  public async recoverStuckTasks(timeoutMs: number = env.TASK_TIMEOUT_MS): Promise<number> {
+    const cutoffIso = new Date(Date.now() - timeoutMs).toISOString();
+    const { data: stuckTasks, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .eq('status', TaskStatus.RUNNING)
+      .not('parent_task_id', 'is', null)
+      .lt('started_at', cutoffIso);
+
+    if (error || !stuckTasks || stuckTasks.length === 0) {
+      return 0;
+    }
+
+    let recovered = 0;
+    for (const raw of stuckTasks) {
+      const task = raw as TaskModel;
+      if (task.retry_count < task.max_retries) {
+        await supabase
+          .from('tasks')
+          .update({
+            status: TaskStatus.PENDING,
+            retry_count: task.retry_count + 1,
+            input_payload: {
+              ...(task.input_payload || {}),
+              recovery_reason: `Recuperada por timeout após ${Math.round(timeoutMs / 1000)}s em execução.`
+            }
+          })
+          .eq('id', task.id);
+      } else {
+        await supabase
+          .from('tasks')
+          .update({
+            status: TaskStatus.FAILED,
+            result_payload: {
+              error: `Tarefa excedeu o tempo limite (${Math.round(timeoutMs / 1000)}s) e o máximo de tentativas (${task.max_retries}).`
+            }
+          })
+          .eq('id', task.id);
+      }
+      recovered++;
+    }
+
+    return recovered;
+  }
+
+  /**
+   * Verifica objetivos macro em 'running' cujas subtarefas filhas já foram 100% concluídas (BKL-001).
+   */
+  public async reconcileCompletedParentObjectives(): Promise<number> {
+    const { data: runningParents, error } = await supabase
+      .from('tasks')
+      .select('id, task_code')
+      .eq('status', TaskStatus.RUNNING)
+      .is('parent_task_id', null);
+
+    if (error || !runningParents || runningParents.length === 0) {
+      return 0;
+    }
+
+    let synthesizedCount = 0;
+    for (const parent of runningParents) {
+      const didSynthesize = await this.checkAndSynthesizeParent(parent.id);
+      if (didSynthesize) {
+        synthesizedCount++;
+      }
+    }
+
+    return synthesizedCount;
   }
 
   /**
@@ -232,7 +318,7 @@ export class AutonomousWorker {
   /**
    * Verifica se todas as tarefas de dependência estão com status = 'completed'.
    */
-  private async areDependenciesSatisfied(dependencies: string[]): Promise<boolean> {
+  public async areDependenciesSatisfied(dependencies: string[]): Promise<boolean> {
     if (!dependencies || dependencies.length === 0) {
       return true;
     }
@@ -250,21 +336,25 @@ export class AutonomousWorker {
   }
 
   /**
-   * Checa se todas as subtarefas de um objetivo macro terminaram para acionar o AG-001.
+   * Checa se todas as subtarefas de um objetivo macro terminaram para acionar o AG-001 (Público - BKL-001).
    */
-  private async checkAndSynthesizeParent(parentTaskId: string): Promise<void> {
+  public async checkAndSynthesizeParent(parentTaskId: string): Promise<boolean> {
+    if (!parentTaskId) return false;
+
     const { data: siblings } = await supabase
       .from('tasks')
       .select('id, status')
       .eq('parent_task_id', parentTaskId);
 
-    if (!siblings || siblings.length === 0) return;
+    if (!siblings || siblings.length === 0) return false;
 
     const allDone = siblings.every(s => s.status === TaskStatus.COMPLETED);
     if (allDone) {
       console.log(`[AutonomousWorker] All subtasks completed for parent ${parentTaskId}. Synthesizing with AG-001...`);
       await orchestrator.synthesizeCompletedObjective(parentTaskId);
+      return true;
     }
+    return false;
   }
 
   /**
@@ -292,4 +382,3 @@ export class AutonomousWorker {
 }
 
 export const autonomousWorker = new AutonomousWorker();
-

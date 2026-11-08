@@ -1,5 +1,5 @@
 // ==============================================================================
-// ORCHESTRATOR: AG-001 CEO / MASTER PLANNER & SYNTHESIZER
+// ORCHESTRATOR: AG-001 CEO / MASTER PLANNER & SYNTHESIZER (BKL-001 & BKL-005)
 // ==============================================================================
 
 import {
@@ -13,6 +13,8 @@ import {
 import { geminiService } from '../config/gemini.js';
 import { supabase } from '../config/supabase.js';
 import { getAgentDefinition } from '../agents/registry.js';
+import { agentRouter } from './agent-router.js';
+import { createAndSaveArtifact } from '../tools/artifact-writer.js';
 
 export interface ObjectiveDecompositionInput {
   objective: string;
@@ -24,10 +26,12 @@ export interface ObjectiveDecompositionInput {
 
 export class Orchestrator {
   /**
-   * Decompõe um objetivo macro enviado pelo fundador em subtarefas atômicas no Supabase.
+   * Decompõe um objetivo macro enviado pelo fundador em subtarefas atômicas no Supabase,
+   * validando disponibilidade e permissões de cada agente via AgentRouter.
    */
   async decomposeObjective(input: ObjectiveDecompositionInput): Promise<{ parentTaskId: string; plan: OrchestratorPlan }> {
     const ag001Def = await getAgentDefinition(AgentId.AG_001);
+    const catalogSummary = agentRouter.getActiveCatalogPromptSummary();
 
     const prompt = `OBJETIVO MACRO DO FUNDADOR:
 "${input.objective}"
@@ -36,17 +40,8 @@ Cliente ID: ${input.clientId || 'Nenhum'}
 
 Sua missão como AG-001 (AI Orchestrator):
 1. Analise o objetivo e decomponha em 2 a 4 subtarefas atômicas, com dependências claras entre elas.
-2. Atribua cada tarefa EXCLUSIVAMENTE a um destes IDs de agente:
-   - "AG-002": Estratégia de Mercado, ICP e Concorrentes
-   - "AG-003": Engenharia Energética e Diagnóstico de Faturas
-   - "AG-004": Engenharia de Dados e OCR
-   - "AG-005": Desenvolvimento de Software e Migrations
-   - "AG-006": Marketing, Conteúdo e Copy B2B
-   - "AG-007": Vendas, Propostas Comerciais e LOI
-   - "AG-008": Auditoria de Qualidade e Conformidade
-   - "AG-009": Regulação ANEEL e Dossiês de Contestação
-   - "AG-010": Medição & Verificação (M&V) e Retenção
-   - "AG-011": CFO Digital e Precificação
+2. Atribua cada tarefa EXCLUSIVAMENTE a um destes IDs de agente ativos no AgentRegistry:
+   ${catalogSummary}
 3. Para tarefas com envio externo, impacto financeiro ou proposta comercial, defina requires_approval = true e risk_level = "LEVEL_2_APPROVAL_REQUIRED".
 4. Retorne EXCLUSIVAMENTE um JSON válido com estas chaves exatas:
 {
@@ -112,20 +107,31 @@ Sua missão como AG-001 (AI Orchestrator):
 
     const parentTaskId = parentTask.id;
 
-    // 2. Cria as Subtarefas no banco mapeando as dependências
+    // 2. Cria as Subtarefas no banco validando via AgentRouter e mapeando as dependências
     const taskCodeToIdMap: Record<string, string> = {};
 
     for (let i = 0; i < plan.decomposed_tasks.length; i++) {
       const subtask = plan.decomposed_tasks[i]!;
       const subtaskCode = `${taskCodeRoot}-${(i + 1).toString().padStart(2, '0')}`;
 
-      // Mapeia dependências por código anterior
+      // Validação determinística via AgentRouter (BKL-005)
+      const routeCheck = await agentRouter.validateAndRouteAgent({
+        requestedAgentId: subtask.assigned_agent_id,
+        taskType: subtask.task_type,
+        objective: subtask.objective
+      });
+
       const dependencyIds: string[] = [];
       for (const depCode of subtask.dependencies_task_codes) {
         if (taskCodeToIdMap[depCode]) {
           dependencyIds.push(taskCodeToIdMap[depCode]);
         }
       }
+
+      const effectiveRequiresApproval = Boolean(subtask.requires_approval || routeCheck.requiresHumanApproval);
+      const effectiveRiskLevel = effectiveRequiresApproval
+        ? ActionRiskLevel.LEVEL_2_APPROVAL_REQUIRED
+        : subtask.risk_level;
 
       const { data: createdSubtask, error: subError } = await supabase
         .from('tasks')
@@ -135,16 +141,21 @@ Sua missão como AG-001 (AI Orchestrator):
           parent_task_id: parentTaskId,
           client_id: input.clientId || null,
           created_by: AgentId.AG_001,
-          assigned_agent_id: subtask.assigned_agent_id,
+          assigned_agent_id: routeCheck.effectiveAgentId,
           objective: subtask.objective,
           task_type: subtask.task_type,
           priority: subtask.priority,
           status: 'pending',
-          risk_level: subtask.risk_level,
+          risk_level: effectiveRiskLevel,
           dependencies: dependencyIds,
-          input_payload: subtask.input_payload || {},
-          requires_approval: subtask.requires_approval,
-          approval_reason: subtask.approval_reason || null
+          input_payload: {
+            ...(subtask.input_payload || {}),
+            router_validation: routeCheck.reason
+          },
+          requires_approval: effectiveRequiresApproval,
+          approval_reason:
+            subtask.approval_reason ||
+            (effectiveRequiresApproval ? routeCheck.reason : null)
         })
         .select('id')
         .single();
@@ -161,25 +172,42 @@ Sua missão como AG-001 (AI Orchestrator):
   }
 
   /**
-   * Consolida os resultados das subtarefas e gera o relatório executivo final.
+   * Consolida os resultados das subtarefas e gera o relatório executivo final + artefato (Idempotente).
    */
   async synthesizeCompletedObjective(parentTaskId: string): Promise<Record<string, any>> {
-    const { data: subtasks } = await supabase
+    const { data: parentTask } = await supabase
       .from('tasks')
       .select('*')
+      .eq('id', parentTaskId)
+      .maybeSingle();
+
+    if (!parentTask) {
+      return {};
+    }
+
+    // Idempotência: se já foi sintetizado e concluído, retorna o resultado existente
+    if (parentTask.status === 'completed' && parentTask.result_payload?.executive_summary_markdown) {
+      return parentTask.result_payload;
+    }
+
+    const { data: subtasks } = await supabase
+      .from('tasks')
+      .select('task_code, assigned_agent_id, objective, status, result_payload, qa_review_payload')
       .eq('parent_task_id', parentTaskId);
 
     const ag001Def = await getAgentDefinition(AgentId.AG_001);
 
-    const prompt = `CONSOLIDAÇÃO EXECUTIVA DE OBJETIVO (AG-001):
-Todas as subtarefas do objetivo macro foram concluídas.
-Subtarefas executadas:
+    const prompt = `CONSOLIDAÇÃO EXECUTIVA DE OBJETIVO MACRO (AG-001):
+Objetivo Original do Fundador: "${parentTask.objective}" (${parentTask.task_code})
+Todas as subtarefas foram concluídas e auditadas:
 ${JSON.stringify(subtasks, null, 2)}
 
-Consolide um resumo executivo com:
-1. Resumo dos principais resultados e números apurados.
-2. Riscos identificados e medidas mitigatórias.
-3. Próximos passos recomendados ao fundador.`;
+Elabore a Síntese Executiva Consolidada do AG-001 retornando um objeto JSON válido contendo:
+- "deliverable_title": título executivo consolidado
+- "executive_summary_markdown": documento corporativo completo em Markdown com seções "## 1. Visão Geral & Resultados Consolidados", "## 2. Entregas por Agente Especialista" (em tabela Markdown), "## 3. Riscos & Mitigações" e "## 4. Próximos Passos Executivos"
+- "recommended_actions": lista de próximos passos prioritários
+- "assumptions": premissas consolidadas
+- "limitations": ressalvas técnicas e regulatórias`;
 
     const synthesis = await geminiService.generateStructuredContent({
       taskId: parentTaskId,
@@ -190,18 +218,46 @@ Consolide um resumo executivo com:
       temperature: 0.2
     });
 
+    const synthesisData = {
+      ...(synthesis.data || {}),
+      deliverable_title:
+        synthesis.data?.deliverable_title ||
+        `Síntese Executiva Consolidada — ${parentTask.objective.slice(0, 70)}`,
+      synthesized_by: AgentId.AG_001,
+      subtasks_count: subtasks?.length || 0,
+      synthesized_at: new Date().toISOString()
+    };
+
     await supabase
       .from('tasks')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
-        result_payload: synthesis.data
+        result_payload: synthesisData
       })
       .eq('id', parentTaskId);
 
-    return synthesis.data;
+    const mdBody =
+      synthesisData.executive_summary_markdown ||
+      `# ${synthesisData.deliverable_title}\n\n## 1. Sumário Executivo\nTodas as ${subtasks?.length || 0} subtarefas do objetivo **${parentTask.task_code}** foram concluídas e consolidadas pelo AG-001.`;
+
+    await createAndSaveArtifact({
+      taskId: parentTaskId,
+      clientId: parentTask.client_id || null,
+      artifactType: 'strategic_plan',
+      title: `${synthesisData.deliverable_title} (${parentTask.task_code})`,
+      summary: `Consolidação executiva final do AG-001 unificando ${subtasks?.length || 0} entregas especialistas.`,
+      contentMarkdown: mdBody,
+      structuredData: synthesisData,
+      metadata: {
+        created_by_agent: AgentId.AG_001,
+        task_code: parentTask.task_code,
+        is_macro_synthesis: true
+      }
+    }).catch(() => {});
+
+    return synthesisData;
   }
 }
 
 export const orchestrator = new Orchestrator();
-

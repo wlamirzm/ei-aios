@@ -17,7 +17,7 @@ import {
   Loader2,
   KeyRound
 } from 'lucide-react';
-import { chatWithAgent, cleanDatabase, fetchAgents, fetchLlmStatus, setLlmApiKey } from '@/lib/api-client';
+import { chatWithAgent, cleanDatabase, fetchAgents, fetchLlmStatus, setLlmApiKey, updateAgentConfig } from '@/lib/api-client';
 import { CorporateMarkdown } from '@/components/ExecutiveDeliverableView';
 
 interface AgentCard {
@@ -214,9 +214,23 @@ export default function AgentsPage() {
     }
   };
 
-  const handleSave = (id: string) => {
-    setSavedMsg(`Configurações e prompt do agente ${id} atualizados com sucesso no Postgres!`);
-    setTimeout(() => setSavedMsg(null), 4000);
+  const handleSave = async (id: string) => {
+    const target = agents.find((a) => a.id === id);
+    if (!target) return;
+
+    try {
+      await updateAgentConfig(id, {
+        system_prompt: target.system_prompt,
+        enabled: target.enabled,
+        model: target.model,
+        temperature: target.temperature,
+        daily_budget_usd: target.daily_budget
+      });
+      setSavedMsg(`Configurações e prompt do agente ${id} persistidos com sucesso no PostgreSQL!`);
+      setTimeout(() => setSavedMsg(null), 4000);
+    } catch (err: any) {
+      alert(`Erro ao salvar configuração do agente ${id}: ${err.message}`);
+    }
   };
 
   const handleCleanDatabase = async () => {

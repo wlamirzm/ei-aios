@@ -2,12 +2,12 @@
 
 import React, { useState } from 'react';
 import { Zap, Lock, Mail, ArrowRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase-client';
+import { loginFounder } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('fundador@energyintelligence.com.br');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -18,18 +18,10 @@ export default function LoginPage() {
     setErrorMsg(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        // Para ambiente de dev sem credenciais criadas ainda
-        console.warn('Login dev fallback:', error.message);
-      }
+      await loginFounder(email, password);
       router.push('/');
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Falha na autenticação');
+      setErrorMsg(err?.message || 'Falha na autenticação soberana');
     } finally {
       setIsLoading(false);
     }
