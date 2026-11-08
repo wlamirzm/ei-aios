@@ -225,3 +225,51 @@ CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(approval_status);
 CREATE INDEX IF NOT EXISTS idx_agent_runs_created_at ON agent_runs(created_at);
 CREATE INDEX IF NOT EXISTS idx_energy_bills_uc_period ON energy_bills(consumer_unit_id, billing_period);
 
+-- 10. CONTAS DE E-MAIL MULTI-DOMÍNIO (HOSTGATOR CPANEL IMAP/SMTP) & TRIAGEM AG-012
+CREATE TABLE IF NOT EXISTS email_accounts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_label VARCHAR(120) NOT NULL,
+  email_address VARCHAR(180) UNIQUE NOT NULL,
+  provider VARCHAR(60) NOT NULL DEFAULT 'hostgator_cpanel',
+  imap_host VARCHAR(180) NOT NULL,
+  imap_port INTEGER NOT NULL DEFAULT 993,
+  smtp_host VARCHAR(180) NOT NULL,
+  smtp_port INTEGER NOT NULL DEFAULT 465,
+  username VARCHAR(180) NOT NULL,
+  password_secret TEXT NOT NULL,
+  operation_mode VARCHAR(30) NOT NULL DEFAULT 'read_summarize', -- 'read_summarize' ou 'auto_action'
+  enabled BOOLEAN NOT NULL DEFAULT true,
+  last_synced_at TIMESTAMPTZ,
+  last_sync_status VARCHAR(120) DEFAULT 'Pronta para sincronizar',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS email_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  account_id UUID NOT NULL REFERENCES email_accounts(id) ON DELETE CASCADE,
+  message_uid VARCHAR(180),
+  from_name VARCHAR(180),
+  from_address VARCHAR(255) NOT NULL,
+  subject VARCHAR(500) NOT NULL,
+  received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  body_excerpt TEXT NOT NULL,
+  has_attachments BOOLEAN NOT NULL DEFAULT false,
+  attachment_names TEXT[] DEFAULT '{}',
+  category VARCHAR(60) NOT NULL DEFAULT 'geral',
+  priority VARCHAR(10) NOT NULL DEFAULT 'P2',
+  ai_summary TEXT NOT NULL,
+  recommended_next_step TEXT NOT NULL,
+  suggested_reply_draft TEXT,
+  recommended_agent_id VARCHAR(20) DEFAULT 'AG-007',
+  operation_mode_applied VARCHAR(30) NOT NULL DEFAULT 'read_summarize',
+  triggered_task_id UUID REFERENCES tasks(id) ON DELETE SET NULL,
+  triggered_task_code VARCHAR(40),
+  status VARCHAR(30) NOT NULL DEFAULT 'analyzed',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_messages_account_id ON email_messages(account_id);
+CREATE INDEX IF NOT EXISTS idx_email_messages_received_at ON email_messages(received_at DESC);
+
+

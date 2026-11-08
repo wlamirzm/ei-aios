@@ -133,3 +133,93 @@ export async function setLlmApiKey(apiKey: string) {
   return res.json();
 }
 
+export async function fetchEmailAccounts() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Falha ao listar contas de e-mail');
+  return res.json();
+}
+
+export async function createEmailAccount(payload: {
+  account_label: string;
+  email_address: string;
+  password: string;
+  imap_host?: string;
+  imap_port?: number;
+  smtp_host?: string;
+  smtp_port?: number;
+  operation_mode: 'read_summarize' | 'auto_action';
+}) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || 'Falha ao cadastrar conta de e-mail');
+  }
+  return res.json();
+}
+
+export async function updateEmailAccount(
+  id: string,
+  payload: Partial<{
+    operation_mode: 'read_summarize' | 'auto_action';
+    enabled: boolean;
+    account_label: string;
+  }>
+) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error('Falha ao atualizar modo da conta de e-mail');
+  return res.json();
+}
+
+export async function deleteEmailAccount(id: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts/${id}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) throw new Error('Falha ao excluir conta de e-mail');
+  return res.json();
+}
+
+export async function syncEmailAccount(id: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts/${id}/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao sincronizar IMAP HostGator');
+  return data;
+}
+
+export async function simulateIncomingEmail(id: string, scenario: 'bill' | 'regulatory' = 'bill') {
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/accounts/${id}/simulate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario })
+  });
+  if (!res.ok) throw new Error('Falha ao simular e-mail');
+  return res.json();
+}
+
+export async function fetchEmailMessages(accountId?: string) {
+  const q = accountId ? `?account_id=${encodeURIComponent(accountId)}` : '';
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/messages${q}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Falha ao listar mensagens de e-mail');
+  return res.json();
+}
+
+export async function executeEmailNextStep(messageId: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/messages/${messageId}/execute-next-step`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!res.ok) throw new Error('Falha ao disparar próximo passo');
+  return res.json();
+}
+
+

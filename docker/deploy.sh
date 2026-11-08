@@ -54,6 +54,8 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
       ALTER TABLE agent_runs ALTER COLUMN task_id DROP NOT NULL;
       ALTER TABLE agents DISABLE ROW LEVEL SECURITY;
       ALTER TABLE knowledge_sources DISABLE ROW LEVEL SECURITY;
+      ALTER TABLE email_accounts DISABLE ROW LEVEL SECURITY;
+      ALTER TABLE email_messages DISABLE ROW LEVEL SECURITY;
       GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
       GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role, postgres;
       GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role, postgres;

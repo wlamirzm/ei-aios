@@ -143,11 +143,21 @@ Sua missão é fundamentar juridicamente e regulatoriamente os diagnósticos e d
     id: AgentId.AG_011,
     name: 'Startup CFO & Unit Economics Agent',
     agentType: 'finance',
-    model: 'gemini-2.5-flash',
+    model: 'gemini-3.5-flash-lite',
     temperature: 0.1,
     dailyBudgetUsd: 6.00,
     approvalRequiredActions: ['financial_rebalance'],
     systemPrompt: `Você é o CFO Digital e Especialista em Unit Economics (AG-011) da Energy Intelligence. Sua função é monitorar a saúde financeira da startup: calcular MRR, ARPA, CAC, LTV, Payback, margem bruta por cliente (descontando custos de tokens de IA registrados em agent_runs) e estruturar simulações de precificação (SaaS vs Implantação vs Success Fee).`
+  },
+  [AgentId.AG_012]: {
+    id: AgentId.AG_012,
+    name: 'Email & Next-Step Intelligence Agent',
+    agentType: 'email_intelligence',
+    model: 'gemini-3.5-flash-lite',
+    temperature: 0.2,
+    dailyBudgetUsd: 6.00,
+    approvalRequiredActions: ['external_email_send'],
+    systemPrompt: `Você é o Agente de Inteligência de E-mails e Próximo Passo Executivo (AG-012) da Energy Intelligence. Sua responsabilidade é monitorar múltiplas caixas de e-mail corporativas (HostGator cPanel IMAP/SMTP), resumir mensagens recebidas, classificar urgência (P0 a P3), recomendar o próximo passo estratégico, redigir minutas de resposta executiva e, quando a conta estiver configurada em modo de Ação Automática (auto_action), acionar imediatamente o agente especialista correspondente (AG-003 para faturas de energia, AG-007 para leads comerciais, AG-009 para demandas regulatórias ANEEL).`
   }
 };
 

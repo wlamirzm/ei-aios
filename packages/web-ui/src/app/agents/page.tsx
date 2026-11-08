@@ -143,11 +143,21 @@ export default function AgentsPage() {
       id: 'AG-011',
       name: 'Startup CFO & Unit Economics Agent',
       role: 'Gestão financeira da startup, DRE, Unit Economics (CAC, LTV, Churn) e governança FinOps de IA.',
-      model: 'gemini-2.5-pro',
+      model: 'gemini-3.5-flash-lite',
       temperature: 0.1,
       daily_budget: 5.00,
       enabled: true,
       system_prompt: 'Você é o Startup CFO & Unit Economics Agent (AG-011)...'
+    },
+    {
+      id: 'AG-012',
+      name: 'Email & Next-Step Intelligence Agent',
+      role: 'Leitura multi-conta IMAP/SMTP (HostGator cPanel), triagem executiva, resumo, recomendação de próximo passo e disparo automático de agentes.',
+      model: 'gemini-3.5-flash-lite',
+      temperature: 0.2,
+      daily_budget: 6.00,
+      enabled: true,
+      system_prompt: 'Você é o Agente de Inteligência de E-mails e Próximo Passo Executivo (AG-012) da Energy Intelligence...'
     }
   ]);
 

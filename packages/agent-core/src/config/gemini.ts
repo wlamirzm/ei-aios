@@ -158,6 +158,14 @@ const AGENT_PERSONAS: Record<string, { title: string; roleSummary: string; examp
       '"Como está nosso consumo FinOps de IA hoje?"',
       '"Qual a margem bruta ideal para nosso modelo SaaS + Success Fee?"'
     ]
+  },
+  'AG-012': {
+    title: 'Email & Next-Step Intelligence Agent',
+    roleSummary: 'Conecto às suas caixas de E-mail cPanel da HostGator (IMAP/SMTP), leio e-mails recebidos, gero resumos executivos, recomendo o próximo passo e disparo tarefas automáticas conforme a configuração de cada conta.',
+    examples: [
+      '"Quais e-mails prioritários chegaram hoje?"',
+      '"Qual o próximo passo para os leads que responderam por e-mail?"'
+    ]
   }
 };
 

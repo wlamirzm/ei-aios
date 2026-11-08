@@ -11,7 +11,8 @@ import {
   Bot,
   BarChart3,
   RefreshCw,
-  Power
+  Power,
+  Mail
 } from 'lucide-react';
 
 export const metadata: Metadata = {
@@ -54,6 +55,14 @@ export default function RootLayout({
                   <span>Aprovações</span>
                 </div>
                 <span className="bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs px-2 py-0.5 rounded-full font-semibold">HITL</span>
+              </Link>
+
+              <Link href="/emails" className="flex items-center justify-between px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">
+                <div className="flex items-center gap-3">
+                  <Mail className="w-4 h-4 text-sky-400" />
+                  <span>E-mails & Triagem</span>
+                </div>
+                <span className="bg-sky-500/20 text-sky-400 border border-sky-500/30 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold">AG-012</span>
               </Link>
 
               <Link href="/energy" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">
@@ -123,7 +132,7 @@ export default function RootLayout({
               </div>
 
               {/* Botão de Ciclo Imediato */}
-              <button 
+              <button
                 title="Forçar ciclo imediato do worker"
                 className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-md border border-slate-700 transition"
               >
@@ -132,7 +141,7 @@ export default function RootLayout({
               </button>
 
               {/* Kill Switch */}
-              <button 
+              <button
                 title="Pausa de Emergência do Worker"
                 className="flex items-center gap-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-3 py-1.5 rounded-md border border-rose-500/30 transition font-semibold"
               >

@@ -271,6 +271,28 @@ Sua missão é fundamentar juridicamente e regulatoriamente os diagnósticos e d
     "daily_budget_usd": 6.00
   }'::jsonb,
   true
+),
+(
+  'AG-012',
+  'Email & Next-Step Intelligence Agent',
+  'email_intelligence',
+  '1.0.0',
+  'Leitura multi-conta IMAP/SMTP (HostGator cPanel), triagem executiva, resumo, recomendação de próximo passo e disparo automático de agentes.',
+  'Você é o Agente de Inteligência de E-mails e Próximo Passo Executivo (AG-012) da Energy Intelligence. Sua responsabilidade é monitorar múltiplas caixas de e-mail corporativas (HostGator cPanel IMAP/SMTP), resumir mensagens recebidas, classificar urgência (P0 a P3), recomendar o próximo passo estratégico, redigir minutas de resposta executiva e, quando a conta estiver configurada em modo de Ação Automática (auto_action), acionar imediatamente o agente especialista correspondente (AG-003 para faturas de energia, AG-007 para leads comerciais, AG-009 para demandas regulatórias ANEEL).',
+  '{
+    "model": "gemini-3.5-flash-lite",
+    "temperature": 0.2,
+    "tools": ["imap_reader", "next_step_analyzer", "task_dispatcher"],
+    "permissions": {
+      "database_read": true,
+      "database_write": true,
+      "external_publish": false,
+      "financial_commitment": false
+    },
+    "approval_required": ["external_email_send"],
+    "daily_budget_usd": 6.00
+  }'::jsonb,
+  true
 )
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,

@@ -18,6 +18,12 @@ import { autonomousWorker } from '../engine/worker.js';
 import { workflowRunner } from '../engine/workflow-runner.js';
 import { parseEnergyBill } from '../tools/bill-parser.js';
 import { runEnergyAudit } from '../tools/energy-calculator.js';
+import {
+  fetchImapEmailsFromHostgator,
+  processAndSaveEmailMessage,
+  createFollowUpTaskFromEmail,
+  EmailAccountRow
+} from '../tools/email-intelligence.js';
 
 export const apiRouter = Router();
 
@@ -567,5 +573,366 @@ apiRouter.post('/api/v1/system/llm-key', (req: Request, res: Response) => {
       : 'Modo Especialista Determinístico EI-AIOS ativado.'
   });
 });
+
+// ------------------------------------------------------------------------------
+// 14. ROTAS DE E-MAIL MULTI-CONTA (HOSTGATOR CPANEL) & TRIAGEM AG-012
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/emails/accounts', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data, error } = await supabase
+      .from('email_accounts')
+      .select('id, account_label, email_address, provider, imap_host, imap_port, smtp_host, smtp_port, username, operation_mode, enabled, last_synced_at, last_sync_status, created_at')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({
+      success: true,
+      accounts: data || [],
+      count: data?.length || 0
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/api/v1/emails/accounts', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const {
+      account_label,
+      email_address,
+      password,
+      imap_host,
+      imap_port,
+      smtp_host,
+      smtp_port,
+      operation_mode
+    } = req.body || {};
+
+    if (!email_address || !password) {
+      res.status(400).json({ error: 'Informe o endereço de e-mail e a senha do cPanel HostGator.' });
+      return;
+    }
+
+    const cleanEmail = String(email_address).trim().toLowerCase();
+    const domainPart = cleanEmail.split('@')[1] || 'seudominio.com.br';
+    const defaultHost = `mail.${domainPart}`;
+
+    const { data, error } = await supabase
+      .from('email_accounts')
+      .insert({
+        account_label: account_label?.trim() || cleanEmail,
+        email_address: cleanEmail,
+        provider: 'hostgator_cpanel',
+        imap_host: imap_host?.trim() || defaultHost,
+        imap_port: Number(imap_port) || 993,
+        smtp_host: smtp_host?.trim() || defaultHost,
+        smtp_port: Number(smtp_port) || 465,
+        username: cleanEmail,
+        password_secret: String(password),
+        operation_mode: operation_mode === 'auto_action' ? 'auto_action' : 'read_summarize',
+        enabled: true,
+        last_sync_status: 'Conta cPanel cadastrada — pronta para leitura'
+      })
+      .select('id, account_label, email_address, provider, imap_host, imap_port, smtp_host, smtp_port, username, operation_mode, enabled, last_synced_at, last_sync_status, created_at')
+      .single();
+
+    if (error) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+
+    res.status(201).json({
+      success: true,
+      account: data
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.patch('/api/v1/emails/accounts/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { operation_mode, enabled, account_label, imap_host, imap_port, smtp_host, smtp_port, password } = req.body || {};
+
+    const updateFields: Record<string, any> = { updated_at: new Date().toISOString() };
+    if (operation_mode === 'read_summarize' || operation_mode === 'auto_action') {
+      updateFields.operation_mode = operation_mode;
+    }
+    if (typeof enabled === 'boolean') updateFields.enabled = enabled;
+    if (account_label) updateFields.account_label = account_label;
+    if (imap_host) updateFields.imap_host = imap_host;
+    if (imap_port) updateFields.imap_port = Number(imap_port);
+    if (smtp_host) updateFields.smtp_host = smtp_host;
+    if (smtp_port) updateFields.smtp_port = Number(smtp_port);
+    if (password) updateFields.password_secret = password;
+
+    const { data, error } = await supabase
+      .from('email_accounts')
+      .update(updateFields)
+      .eq('id', id)
+      .select('id, account_label, email_address, provider, imap_host, imap_port, smtp_host, smtp_port, username, operation_mode, enabled, last_synced_at, last_sync_status, created_at')
+      .single();
+
+    if (error) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+
+    res.json({
+      success: true,
+      account: data
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.delete('/api/v1/emails/accounts/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { error } = await supabase.from('email_accounts').delete().eq('id', id);
+    if (error) {
+      res.status(400).json({ error: error.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/api/v1/emails/accounts/:id/sync', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { data: account, error: accErr } = await supabase
+      .from('email_accounts')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (accErr || !account) {
+      res.status(404).json({ error: 'Conta de e-mail não encontrada.' });
+      return;
+    }
+
+    try {
+      const rawEmails = await fetchImapEmailsFromHostgator(account as EmailAccountRow, 5);
+      const processed = [];
+
+      for (const item of rawEmails) {
+        const saved = await processAndSaveEmailMessage(account as EmailAccountRow, item);
+        processed.push(saved);
+      }
+
+      const syncStatus =
+        rawEmails.length > 0
+          ? `Sincronizado via IMAP SSL (${rawEmails.length} e-mail(s) lido(s) pelo AG-012)`
+          : 'Conectado via IMAP SSL — Caixa de entrada sem novos e-mails';
+
+      await supabase
+        .from('email_accounts')
+        .update({
+          last_synced_at: new Date().toISOString(),
+          last_sync_status: syncStatus
+        })
+        .eq('id', id);
+
+      res.json({
+        success: true,
+        syncedCount: processed.length,
+        status: syncStatus,
+        messages: processed
+      });
+    } catch (imapErr: any) {
+      const errMsg = imapErr?.message || 'Erro ao conectar via IMAP SSL';
+      await supabase
+        .from('email_accounts')
+        .update({
+          last_synced_at: new Date().toISOString(),
+          last_sync_status: `Alerta IMAP: ${errMsg}`
+        })
+        .eq('id', id);
+
+      res.status(400).json({
+        success: false,
+        error: errMsg
+      });
+    }
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/api/v1/emails/accounts/:id/simulate', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { scenario } = req.body || {};
+
+    const { data: account, error: accErr } = await supabase
+      .from('email_accounts')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (accErr || !account) {
+      res.status(404).json({ error: 'Conta de e-mail não encontrada.' });
+      return;
+    }
+
+    const sampleEmails = [
+      {
+        uid: `sim-${Date.now()}`,
+        fromName: 'Carlos Mendes (Diretor Financeiro - Rede Supermercados BomPreço)',
+        fromAddress: 'carlos.mendes@superbompreco.com.br',
+        subject: 'Análise de Fatura Grupo A4 - Loja Campinas (Multa de Demanda e Reativo)',
+        receivedAt: new Date().toISOString(),
+        bodyExcerpt:
+          'Olá! Recebemos o contato de vocês sobre auditoria energética. Nossa loja matriz em Campinas (Grupo A4 - CPFL Paulista) veio com R$ 48.500,00 neste mês, incluindo cobrança de ultrapassagem de demanda (contratada 250 kW, medida 292 kW) e R$ 1.850,00 de energia reativa excedente (UFER). Segue a fatura em PDF. Qual o próximo passo para reduzirmos esse custo?',
+        hasAttachments: true,
+        attachmentNames: ['Fatura_CPFL_Campinas_2026_11.pdf']
+      },
+      {
+        uid: `sim-${Date.now()}`,
+        fromName: 'Dra. Helena Costa (Jurídico Metalúrgica Vale Sul)',
+        fromAddress: 'helena.costa@metalvalesul.com.br',
+        subject: 'Dúvida sobre Restituição em Dobro ANEEL REN 1.000/2021 e Proposta Comercial',
+        receivedAt: new Date().toISOString(),
+        bodyExcerpt:
+          'Boa noite. Identificamos que nossa concessionária cobrou tarifa de demanda incorreta nos últimos 24 meses em nossa planta industrial. Gostaríamos de entender como funciona o modelo de vocês de Success Fee (20%) + SaaS para montar o dossiê de restituição em dobro pelo Art. 323 da REN 1.000/2021 e já agendar uma reunião comercial.',
+        hasAttachments: false,
+        attachmentNames: []
+      }
+    ];
+
+    const chosen = scenario === 'regulatory' ? sampleEmails[1]! : sampleEmails[0]!;
+    const saved = await processAndSaveEmailMessage(account as EmailAccountRow, chosen);
+
+    await supabase
+      .from('email_accounts')
+      .update({
+        last_synced_at: new Date().toISOString(),
+        last_sync_status: `E-mail analisado pelo AG-012 (Modo: ${
+          account.operation_mode === 'auto_action' ? 'Ação Automática' : 'Somente Ler e Resumir'
+        })`
+      })
+      .eq('id', id);
+
+    res.status(201).json({
+      success: true,
+      message: saved
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/api/v1/emails/messages', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const accountId = req.query.account_id as string | undefined;
+    let query = supabase
+      .from('email_messages')
+      .select('*, account:email_accounts(id, account_label, email_address, operation_mode)')
+      .order('received_at', { ascending: false })
+      .limit(50);
+
+    if (accountId) {
+      query = query.eq('account_id', accountId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({
+      success: true,
+      messages: data || [],
+      count: data?.length || 0
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/api/v1/emails/messages/:id/execute-next-step', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { data: msg, error: msgErr } = await supabase
+      .from('email_messages')
+      .select('*, account:email_accounts(*)')
+      .eq('id', id)
+      .single();
+
+    if (msgErr || !msg) {
+      res.status(404).json({ error: 'Mensagem não encontrada.' });
+      return;
+    }
+
+    if (msg.triggered_task_id) {
+      res.json({
+        success: true,
+        alreadyTriggered: true,
+        triggered_task_id: msg.triggered_task_id,
+        triggered_task_code: msg.triggered_task_code
+      });
+      return;
+    }
+
+    const account = msg.account as EmailAccountRow;
+    const createdTask = await createFollowUpTaskFromEmail(
+      account,
+      {
+        uid: msg.message_uid || msg.id,
+        fromName: msg.from_name || msg.from_address,
+        fromAddress: msg.from_address,
+        subject: msg.subject,
+        receivedAt: msg.received_at,
+        bodyExcerpt: msg.body_excerpt,
+        hasAttachments: msg.has_attachments,
+        attachmentNames: msg.attachment_names || []
+      },
+      {
+        category: msg.category,
+        priority: msg.priority,
+        ai_summary: msg.ai_summary,
+        recommended_next_step: msg.recommended_next_step,
+        suggested_reply_draft: msg.suggested_reply_draft,
+        recommended_agent_id: msg.recommended_agent_id || 'AG-007',
+        auto_task_objective: `${msg.recommended_next_step} (Ref: E-mail "${msg.subject}" de ${msg.from_address})`
+      }
+    );
+
+    if (!createdTask) {
+      res.status(500).json({ error: 'Falha ao criar tarefa para o próximo passo.' });
+      return;
+    }
+
+    const { data: updatedMsg } = await supabase
+      .from('email_messages')
+      .update({
+        triggered_task_id: createdTask.id,
+        triggered_task_code: createdTask.task_code,
+        status: 'task_dispatched'
+      })
+      .eq('id', id)
+      .select('*, account:email_accounts(id, account_label, email_address, operation_mode)')
+      .single();
+
+    res.json({
+      success: true,
+      task: createdTask,
+      message: updatedMsg
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 
 
