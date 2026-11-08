@@ -124,3 +124,4 @@
 - **Critérios de Aceite:**
   - Suíte completa executando em < 20 segundos em ambiente local e no CI do GitHub Actions.
 - **Estimativa:** **4 h**
+

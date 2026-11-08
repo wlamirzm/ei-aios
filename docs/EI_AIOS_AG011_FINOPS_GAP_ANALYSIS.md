@@ -151,3 +151,4 @@ Para que o AG-011 atue com soberania e veracidade econômica absoluta, a platafo
 2. **Cost Ledger Unificado:** Registrar tanto custos diretos de IA quanto custos indiretos de infraestrutura e ferramentas.
 3. **Tabela de Preços Versionada:** Migrar o array estático `PRICING_PER_MILLION` para uma tabela no PostgreSQL gerenciável pelo fundador.
 4. **Módulo de Despesas Comerciais:** Permitir o lançamento de despesas de marketing/vendas para habilitar o cálculo real de CAC e Payback.
+

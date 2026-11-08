@@ -153,3 +153,4 @@ Atualmente, o catálogo de agentes define `daily_budget_usd` em cada agente (ex:
    $$\text{Gasto Hoje} = \sum_{\text{hoje}} \text{total\_cost\_usd}(\text{agent\_id})$$
 2. Se $\text{Gasto Hoje} \ge \text{daily\_budget\_usd}$:
    - **Ação:** Bloqueia chamadas com modelos caros (`gemini-2.5-pro`) e rebaixa automaticamente para modelos leves (`gemini-3.5-flash-lite`), registrando alerta no painel do fundador.
+

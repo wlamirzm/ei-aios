@@ -89,3 +89,4 @@ sequenceDiagram
    - Não se sabe quanto tempo o OCR multimodal ou a leitura de 100 e-mails via IMAP demorou para rodar.
 4. **Gap OBS-04 — Inexistência de Ledger Financeiro Consolidado:**
    - Gastos com servidores, bancos de dados, armazenamento de faturas e licenças de software não estão integrados à inteligência financeira da empresa.
+

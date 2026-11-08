@@ -120,3 +120,4 @@ Consulta completa ao endpoint `GET /api/v1/tasks` (13 tarefas registradas):
 A Release **v1.5 do EI-AIOS está operando em regime de alta disponibilidade**, com concorrência blindada, PostgREST sincronizado e watchdog operacional ativo.
 
 Não há pendências de infraestrutura, bloqueios de orquestração ou vazamentos de processos.
+
