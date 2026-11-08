@@ -83,16 +83,20 @@ export async function executeAgentTask(task: TaskModel): Promise<AgentExecutionR
         .filter((b: any) => b.validation_status !== 'verified_mv')
         .reduce((acc: number, b: any) => acc + Number(b.potential_savings_brl || 0), 0);
 
+      // S5-04: Eliminação de fallbacks fictícios (CFO-009). Diferenciação de zero vs ausente
+      const isMissingMrr = c.mrr_brl === null || c.mrr_brl === undefined || isNaN(Number(c.mrr_brl));
+
       return {
         clientId: c.id,
         companyName: c.company_name || 'Cliente',
         isActive: c.stage !== 'churned',
-        mrrBrl: Number(c.mrr_brl ?? 1490),
-        setupFeeBrl: Number(c.setup_fee_brl ?? 2500),
-        successFeePercent: Number(c.success_fee_percent ?? 20),
-        verifiedMonthlySavingsBrl: Number(input.verified_monthly_savings_brl ?? verifiedSavings),
-        unverifiedEstimatedSavingsBrl: Number(input.unverified_estimated_savings_brl ?? unverifiedSavings),
-        directMonthlySupportCostBrl: Number(c.direct_monthly_cost_brl ?? 180),
+        mrrBrl: isMissingMrr ? 0 : Number(c.mrr_brl),
+        isMrrMissing: isMissingMrr,
+        setupFeeBrl: c.setup_fee_brl != null && !isNaN(Number(c.setup_fee_brl)) ? Number(c.setup_fee_brl) : 0,
+        successFeePercent: c.success_fee_percent != null && !isNaN(Number(c.success_fee_percent)) ? Number(c.success_fee_percent) : 0,
+        verifiedMonthlySavingsBrl: input.verified_monthly_savings_brl != null ? Number(input.verified_monthly_savings_brl) : verifiedSavings,
+        unverifiedEstimatedSavingsBrl: input.unverified_estimated_savings_brl != null ? Number(input.unverified_estimated_savings_brl) : unverifiedSavings,
+        directMonthlySupportCostBrl: c.direct_monthly_cost_brl != null && !isNaN(Number(c.direct_monthly_cost_brl)) ? Number(c.direct_monthly_cost_brl) : 0,
         consumerUnitsCount: Math.max(1, clientUcs.length)
       };
     });

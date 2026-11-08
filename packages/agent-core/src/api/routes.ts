@@ -78,10 +78,11 @@ apiRouter.get('/api/v1/auth/verify', requireFounderAuth, (req: Request, res: Res
   });
 });
 
-// Protege explicitamente as rotas críticas definidas na Sprint 1 (BKL-004):
+// Protege explicitamente as rotas críticas definidas na Sprint 1 (BKL-004) e Sprint 5 (S5-05):
 apiRouter.use('/api/v1/system', requireFounderAuth);
 apiRouter.use('/api/v1/approvals', requireFounderAuth);
 apiRouter.use('/api/v1/emails', requireFounderAuth);
+apiRouter.use('/api/v1/decisions', requireFounderAuth);
 
 // Configuração do Multer para upload de contas de energia em memória
 const upload = multer({
@@ -1189,6 +1190,15 @@ apiRouter.post('/api/v1/emails/messages/:id/execute-next-step', async (req: Requ
       return;
     }
 
+    // S5-05: Resposta HTTP 403 Forbidden para mensagens em quarentena de segurança (AG-012)
+    if (msg.status === 'blocked_security_review' || msg.status === 'quarantine') {
+      res.status(403).json({
+        success: false,
+        error: 'Ação bloqueada: esta mensagem está em quarentena por suspeita de Prompt Injection ou violação de segurança (AG-012).'
+      });
+      return;
+    }
+
     if (msg.triggered_task_id) {
       res.json({
         success: true,
@@ -1243,6 +1253,57 @@ apiRouter.post('/api/v1/emails/messages/:id/execute-next-step', async (req: Requ
       success: true,
       task: createdTask,
       message: updatedMsg
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// S5-05: GET /api/v1/decisions (Consulta à Trilha de Auditoria com Paginação e Filtros)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/decisions', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const parentTaskId = req.query.parent_task_id ? String(req.query.parent_task_id) : undefined;
+    const agentId = req.query.agent_id ? String(req.query.agent_id) : undefined;
+    const decisionType = req.query.decision_type ? String(req.query.decision_type) : undefined;
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
+    const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+
+    let query = supabase
+      .from('decision_logs')
+      .select('*', { count: 'exact' });
+
+    if (parentTaskId) {
+      query = query.eq('parent_task_id', parentTaskId);
+    }
+    if (agentId) {
+      query = query.eq('agent_id', agentId);
+    }
+    if (decisionType) {
+      query = query.eq('decision_type', decisionType);
+    }
+
+    const { data: decisions, count, error } = await query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      res.status(500).json({
+        success: false,
+        error: 'Erro ao consultar trilha de decisões: ' + error.message
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: decisions || [],
+      pagination: {
+        total: count ?? (decisions?.length || 0),
+        limit,
+        offset
+      }
     });
   } catch (err) {
     next(err);

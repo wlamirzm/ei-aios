@@ -4,6 +4,7 @@
 
 import {
   AgentId,
+  TaskStatus,
   OrchestratorPlan,
   OrchestratorPlanSchema,
   PriorityLevel,
@@ -210,8 +211,8 @@ Sua missão como AG-001 (AI Orchestrator):
       return {};
     }
 
-    // Idempotência: se já foi sintetizado e concluído, retorna o resultado existente
-    if (parentTask.status === 'completed' && parentTask.result_payload?.executive_summary_markdown) {
+    // Idempotência: se já foi sintetizado e concluído ou falhado com encerramento estruturado, retorna o resultado existente
+    if ((parentTask.status === 'completed' || parentTask.status === 'failed') && parentTask.result_payload?.executive_summary_markdown) {
       return parentTask.result_payload;
     }
 
@@ -219,6 +220,82 @@ Sua missão como AG-001 (AI Orchestrator):
       .from('tasks')
       .select('task_code, assigned_agent_id, objective, status, result_payload, qa_review_payload')
       .eq('parent_task_id', parentTaskId);
+
+    // S5-01: Verificação de subtarefas com falha definitiva
+    const failedSubtasks = (subtasks || []).filter(s => s.status === TaskStatus.FAILED);
+    if (failedSubtasks.length > 0) {
+      console.warn(`[Orchestrator] Parent ${parentTask.task_code} has ${failedSubtasks.length} failed subtask(s). Initiating structured contingency closure.`);
+
+      const contingencyData = {
+        deliverable_title: `Encerramento Estruturado por Falha — ${parentTask.objective.slice(0, 70)}`,
+        status: TaskStatus.FAILED,
+        synthesized_by: AgentId.AG_001,
+        subtasks_count: subtasks?.length || 0,
+        failed_subtasks_count: failedSubtasks.length,
+        failed_subtasks: failedSubtasks.map(f => ({
+          task_code: f.task_code,
+          assigned_agent_id: f.assigned_agent_id,
+          objective: f.objective,
+          error: f.result_payload?.error || f.qa_review_payload?.critical_inconsistencies || 'Falha na execução ou auditoria QA'
+        })),
+        contingency_report: {
+          summary: `O objetivo macro ${parentTask.task_code} não pôde ser completado integralmente devido a falhas definitivas em ${failedSubtasks.length} subtarefa(s).`,
+          remediation_plan: 'Avaliar os erros de QA ou timeouts nas subtarefas listadas e reexecutar com parâmetros corrigidos.',
+          affected_agents: Array.from(new Set(failedSubtasks.map(f => f.assigned_agent_id)))
+        },
+        executive_summary_markdown: `# Encerramento Estruturado por Falha — ${parentTask.task_code}\n\n## 1. Sumário de Contingência\nO objetivo **${parentTask.objective}** foi encerrado de forma controlada porque ${failedSubtasks.length} de ${subtasks?.length || 0} subtarefas falharam definitivamente.\n\n## 2. Subtarefas com Falha\n${failedSubtasks.map(f => `- **${f.task_code}** (${f.assigned_agent_id}): ${f.objective}\n  *Motivo:* ${f.result_payload?.error || 'Erro reportado pelo QA Gate'}`).join('\n')}\n\n## 3. Próximos Passos de Contingência\nRecomenda-se ajuste de escopo ou reprocessamento manual das subtarefas afetadas.`,
+        synthesized_at: new Date().toISOString()
+      };
+
+      await supabase
+        .from('tasks')
+        .update({
+          status: TaskStatus.FAILED,
+          completed_at: new Date().toISOString(),
+          result_payload: contingencyData
+        })
+        .eq('id', parentTaskId);
+
+      await createAndSaveArtifact({
+        taskId: parentTaskId,
+        clientId: parentTask.client_id || null,
+        artifactType: 'strategic_plan',
+        title: `Relatório de Contingência — ${parentTask.task_code}`,
+        summary: `Encerramento estruturado do AG-001 registrando falha de ${failedSubtasks.length} subtarefas.`,
+        contentMarkdown: contingencyData.executive_summary_markdown,
+        structuredData: contingencyData,
+        metadata: {
+          created_by_agent: AgentId.AG_001,
+          task_code: parentTask.task_code,
+          is_macro_synthesis: true,
+          status: 'failed'
+        }
+      }).catch(() => {});
+
+      try {
+        await supabase.from('decision_logs').insert({
+          parent_task_id: parentTaskId,
+          agent_id: AgentId.AG_001,
+          decision_type: 'synthesis_failure_contingency',
+          decision_summary: `Encerramento estruturado do objetivo macro "${parentTask.objective}" devido à falha definitiva de ${failedSubtasks.length} subtarefa(s).`,
+          rationales: [
+            `${failedSubtasks.length} subtarefas atingiram falha terminal.`,
+            'Encerramento estruturado disparado para evitar travamento em running.'
+          ],
+          alternatives_considered: ['Manter em running indefinidamente (descartado)'],
+          risk_assessment: {
+            failed_subtasks_count: failedSubtasks.length,
+            status: 'failed'
+          },
+          metadata: {
+            task_code: parentTask.task_code,
+            completed_at: new Date().toISOString()
+          }
+        });
+      } catch {}
+
+      return contingencyData;
+    }
 
     const ag001Def = await getAgentDefinition(AgentId.AG_001);
 

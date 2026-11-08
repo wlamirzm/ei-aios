@@ -16,8 +16,9 @@ A tabela abaixo reconcilia 100% dos **19 Gaps (`GAP-P0-01` a `GAP-P3-03`)** em *
 | **Sprint 1** | **Correções Bloqueadoras (P0), Segurança Backend/RLS, Agent Router & Orquestração AG-001** | `BKL-001` a `BKL-005` | 5 | **18 h** (`2+3+3+6+4`) | ✅ **CONCLUÍDA EM PRODUÇÃO (`v1.1`)** |
 | **Sprint 2** | **Evolução Completa do AG-011 (CFO Digital, `finops-calculator.ts` e Contratos)** | `BKL-006` a `BKL-008` | 3 | **14 h** (`6+5+3`) | ✅ **CONCLUÍDA EM PRODUÇÃO (`v1.2`)** |
 | **Sprint 3** | **Evolução Completa do AG-012 (3 Modos, Políticas, Anti-Injection, Deduplicação RFC, TLS)** | `BKL-009` a `BKL-013` | 5 | **18 h** (`3+4+5+4+2`) | ✅ **CONCLUÍDA EM PRODUÇÃO (`v1.3`)** |
-| **Sprint 4** | **Integração RAG Regulatório (`AG-009`), Validador `AG-004`, Cron IMAP/`decision_logs` e Testes E2E** | `BKL-014` a `BKL-017` | 4 | **10 h** (`2+2+2+4`) | ✅ **CONCLUÍDA (`v1.4`)** |
-| **TOTAL** | | **`BKL-001` a `BKL-017`** | **17** | **60 h** | **60h / 60h Concluídas (100%)** |
+| **Sprint 4** | **Integração RAG Regulatório (`AG-009`), Validador `AG-004`, Cron IMAP/`decision_logs` e Testes E2E** | `BKL-014` a `BKL-017` | 4 | **10 h** (`2+2+2+4`) | ✅ **CONCLUÍDA EM PRODUÇÃO (`v1.4`)** |
+| **Sprint 5** | **Reliability, Orchestration Hardening & Concurrency Governance** | `S5-01` a `S5-06` | 6 | **16 h** (`3+2+4+2+2+3`) | ✅ **IMPLEMENTADA LOCALMENTE (`54/54` Testes Passam)** |
+| **TOTAL** | | **`BKL-001` a `S5-06`** | **23** | **76 h** | **76h / 76h Concluídas (100%)** |
 
 ---
 
@@ -245,3 +246,49 @@ A tabela abaixo reconcilia 100% dos **19 Gaps (`GAP-P0-01` a `GAP-P3-03`)** em *
 - **Critérios de Aceite:** `npm test` executando todas as suítes (Energia, M&V, Segurança, Orquestração, CFO e E-mail) com 100% de aprovação.
 - **Estimativa:** **4 h**
 - **Riscos:** Baixo.
+
+---
+
+### SPRINT 5 — Reliability, Orchestration Hardening & Concurrency Governance (16h)
+
+#### `S5-01` — Lock Atômico de Síntese AG-001 e Encerramento Estruturado por Falha
+- **Prioridade:** `P0`
+- **Módulo / Agente:** `AG-001` (`packages/agent-core/src/engine/orchestrator.ts`, `worker.ts`, `packages/shared/src/enums.ts`)
+- **História de Usuário:** Como orquestrador sovereign, quero lock atômico (`synthesizing`) para impedir sínteses duplicadas de tarefas-mãe e consolidação estruturada com relatório de contingência quando subtarefas falharem definitivamente.
+- **Critérios de Aceite:** Lock atômico em `checkAndSynthesizeParent`; encerramento estruturado com relatório de contingência e registro em `decision_logs` quando subtarefas falharem.
+- **Estimativa:** **3 h**
+
+#### `S5-02` — Universal Watchdog para Tarefas Standalone e started_at Nulo
+- **Prioridade:** `P0`
+- **Módulo / Agente:** Engine / Worker (`packages/agent-core/src/engine/worker.ts`)
+- **História de Usuário:** Como sistema operacional, quero que o watchdog recupere tanto subtarefas quanto tarefas standalone em `running`, tratando `started_at` nulo via `created_at` e preservando a exclusão de `macro_objective`.
+- **Critérios de Aceite:** Remoção do filtro restritivo de `parent_task_id`, fallback para `created_at`, batch limit de 20 tarefas.
+- **Estimativa:** **2 h**
+
+#### `S5-03` — Claim Atômico com Lease Token e Rejeição de Worker Zumbi
+- **Prioridade:** `P0`
+- **Módulo / Agente:** Engine / Concorrência (`packages/agent-core/src/engine/worker.ts`)
+- **História de Usuário:** Como sistema distribuído, quero que múltiplos workers concorrentes não executem a mesma tarefa e que conclusões tardias de workers atrasados sejam descartadas.
+- **Critérios de Aceite:** Claim atômico com `status = 'pending'` e `lease_token`; checagem de lease antes de salvar resultados e na transição para `completed`.
+- **Estimativa:** **4 h**
+
+#### `S5-04` — Integridade Financeira AG-011 sem Fallbacks Fictícios
+- **Prioridade:** `P1`
+- **Módulo / Agente:** `AG-011` (`packages/agent-core/src/agents/executors.ts`, `finops-calculator.ts`)
+- **História de Usuário:** Como CFO Digital, quero calcular métricas sem inventar MRR ou receita, retornando status `incomplete` quando os dados forem ausentes conforme CFO-009.
+- **Critérios de Aceite:** Remoção do fallback `?? 1490`; diferenciação de zero vs ausente; status `incomplete` quando faltam dados.
+- **Estimativa:** **2 h**
+
+#### `S5-05` — Endpoint GET /api/v1/decisions e Resposta HTTP 403 em Quarentena
+- **Prioridade:** `P1`
+- **Módulo / Agente:** API / Segurança (`packages/agent-core/src/api/routes.ts`)
+- **História de Usuário:** Como fundador, quero consultar a trilha auditável de decisões via API autenticada e garantir que mensagens em quarentena recebam HTTP 403 Forbidden.
+- **Critérios de Aceite:** Rota `GET /api/v1/decisions` com `requireFounderAuth`, filtros e paginação; HTTP 403 em `/execute-next-step` para mensagens em quarentena.
+- **Estimativa:** **2 h**
+
+#### `S5-06` — Suíte de Testes Automatizados Sprint 5 (HARD-01 a HARD-07)
+- **Prioridade:** `P0`
+- **Módulo / Agente:** Testes (`packages/agent-core/src/engine/sprint5-hardening.test.ts`)
+- **História de Usuário:** Como auditor técnico, quero testes automatizados cobrindo concorrência, idempotência, recuperação de watchdog e quarentena.
+- **Critérios de Aceite:** 7 cenários automatizados cobrindo HARD-01 a HARD-07 passando com 100% de sucesso.
+- **Estimativa:** **3 h**

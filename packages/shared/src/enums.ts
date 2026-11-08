@@ -6,6 +6,7 @@ export enum TaskStatus {
   PENDING = 'pending',
   ASSIGNED = 'assigned',
   RUNNING = 'running',
+  SYNTHESIZING = 'synthesizing',
   WAITING_INPUT = 'waiting_input',
   REVIEW = 'review',
   APPROVED = 'approved',

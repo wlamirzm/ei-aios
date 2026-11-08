@@ -22,6 +22,8 @@ export interface ClientFinancialContractInput {
   isActive: boolean;
   /** Mensalidade SaaS recorrente contratada (BRL/mês) */
   mrrBrl: number;
+  /** Sinaliza se o MRR estava nulo/ausente no banco de dados (CFO-009) */
+  isMrrMissing?: boolean;
   /** Taxa de implantação one-off (NÃO compõe MRR recorrente - CFO-001) */
   setupFeeBrl?: number;
   /** Percentual de Success Fee contratual (ex: 20%) */
@@ -158,7 +160,9 @@ export function calculateMrrAndArr(contracts: ClientFinancialContractInput[]): M
   const revPerUcBrl = totalUcs > 0 ? round2(mrrBrl / totalUcs) : 0;
   const topSharePct = mrrBrl > 0 ? round2((maxClientMrr / mrrBrl) * 100) : 0;
 
-  const status: CFOMetricStatus = activeCount > 0 ? 'verified' : 'incomplete';
+  // CFO-009: Se não houver clientes ativos ou houver dados de MRR ausentes/não preenchidos, status é 'incomplete'
+  const hasMissingMrr = activeContracts.some((c) => c.isMrrMissing || c.mrrBrl === null || c.mrrBrl === undefined);
+  const status: CFOMetricStatus = activeCount > 0 && !hasMissingMrr ? 'verified' : 'incomplete';
 
   return {
     mrr_brl: mrrBrl,
@@ -541,7 +545,7 @@ export function runFullCfoSnapshot(input: {
   });
 
   const scenarios = simulatePricingScenarios({
-    baseMrrPerClientBrl: mrrArr.arpa_brl > 0 ? mrrArr.arpa_brl : 1490
+    baseMrrPerClientBrl: mrrArr.arpa_brl > 0 ? mrrArr.arpa_brl : 0
   });
 
   const alerts: string[] = [];

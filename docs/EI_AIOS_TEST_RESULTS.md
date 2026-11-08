@@ -108,3 +108,22 @@ npm test
 | `INT-005` | Sync IMAP Agendado | Permite sincronização periódica de e-mails via worker | ✅ **APROVADO (`IMPLEMENTADO`)** | `AutonomousWorker.checkAndTriggerScheduledEmailSync()` configurado por `EMAIL_AUTO_SYNC_MINUTES` (`INT-005 PASS`) |
 | `INT-006` | Pipeline Integrado E2E | Fluxo completo `AG-012` -> `AG-003` -> `AG-004` -> `AG-011` -> `AG-008` -> `AG-001` | ✅ **APROVADO (`IMPLEMENTADO`)** | Triagem, validação, auditoria de energia, FinOps, QA Gate e roteamento integrados (`INT-006 PASS`) |
 
+---
+
+## 6. Matriz de Testes de Concorrência, Resiliência e Idempotência — Sprint 5 (`HARD-01` a `HARD-07`) — **7/7 APROVADOS NA SPRINT 5**
+
+| ID | Cenário | Critério de Aceite | Status Atual | Evidência Verificada (`sprint5-hardening.test.ts`) |
+|---|---|---|---|---|
+| `HARD-01` | Multi-Worker Atomic Claim | Exatamente um worker adquire o claim com `lease_token` | ✅ **APROVADO (`IMPLEMENTADO`)** | Claim atômico com `status = 'pending'` impede corrida concorrente entre workers (`HARD-01 PASS`) |
+| `HARD-02` | Rejeição de Worker Zumbi | Worker atrasado não sobrescreve tarefa recuperada por timeout | ✅ **APROVADO (`IMPLEMENTADO`)** | Validação de `lease_token` e status impede sobrescrita por workers defasados (`HARD-02 PASS`) |
+| `HARD-03` | Lock Atômico de Síntese | Síntese de tarefa-mãe executa exatamente uma vez | ✅ **APROVADO (`IMPLEMENTADO`)** | Lock atômico `status = 'synthesizing'` garante execução única da síntese (`HARD-03 PASS`) |
+| `HARD-04` | Encerramento Estruturado de Falha | Subtarefa com falha gera contingência estruturada | ✅ **APROVADO (`IMPLEMENTADO`)** | Consolidação de falha em `orchestrator.ts` com artefato e log em `decision_logs` (`HARD-04 PASS`) |
+| `HARD-05` | Universal Watchdog | Recupera tarefas standalone e trata `started_at` nulo | ✅ **APROVADO (`IMPLEMENTADO`)** | Watchdog universal com fallback para `created_at` e exclusão de `macro_objective` (`HARD-05 PASS`) |
+| `HARD-06` | Integridade Financeira AG-011 | Elimina fallback fictício de R$ 1.490 e retorna `incomplete` | ✅ **APROVADO (`IMPLEMENTADO`)** | MRR reporta 0 e status `incomplete` conforme CFO-009 quando dados faltam (`HARD-06 PASS`) |
+| `HARD-07` | Quarentena & API de Decisões | Mensagem em quarentena retorna HTTP 403 e auditoria é consultável | ✅ **APROVADO (`IMPLEMENTADO`)** | HTTP 403 Forbidden em quarentena e rota `GET /api/v1/decisions` paginada (`HARD-07 PASS`) |
+
+---
+
+**TOTAL GERAL DA SUÍTE AUTOMATIZADA:** **`54 / 54 TESTES APROVADOS (100% PASS)`**
+
+

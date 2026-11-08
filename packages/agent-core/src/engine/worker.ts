@@ -92,7 +92,7 @@ export class AutonomousWorker {
         return { processedCount: 0 };
       }
 
-      const readyTasks: TaskModel[] = [];
+      const readyTasks: { task: TaskModel; leaseToken: string }[] = [];
 
       for (const rawTask of pendingTasks) {
         const task = rawTask as TaskModel;
@@ -110,22 +110,35 @@ export class AutonomousWorker {
           continue;
         }
 
-        // 4. Marca status = 'running' antes de disparar em paralelo
-        await supabase
+        // 4. S5-03: Claim atômico no banco com geração de lease_token exclusivo
+        const leaseToken = `lease_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const { data: claimedTasks, error: claimErr } = await supabase
           .from('tasks')
           .update({
             status: TaskStatus.RUNNING,
-            started_at: new Date().toISOString()
+            started_at: new Date().toISOString(),
+            input_payload: {
+              ...(task.input_payload || {}),
+              lease_token: leaseToken
+            }
           })
-          .eq('id', task.id);
+          .eq('id', task.id)
+          .eq('status', TaskStatus.PENDING)
+          .select('*');
 
-        readyTasks.push(task);
+        if (claimErr || !claimedTasks || claimedTasks.length === 0) {
+          console.log(`[AutonomousWorker] Task ${task.task_code} already claimed by another worker instance.`);
+          continue;
+        }
+
+        const claimedTask = claimedTasks[0] as TaskModel;
+        readyTasks.push({ task: claimedTask, leaseToken });
       }
 
       if (readyTasks.length > 0) {
         processedCount = readyTasks.length;
-        // Execução paralela controlada de todas as subtarefas independentes prontas (BKL-005)
-        await Promise.allSettled(readyTasks.map(task => this.processSingleTask(task)));
+        // Execução paralela controlada de todas as subtarefas com proteção de lease
+        await Promise.allSettled(readyTasks.map(item => this.processSingleTask(item.task, item.leaseToken)));
       }
     } catch (cycleErr) {
       console.error('[AutonomousWorker] Error in pollAndExecute:', cycleErr);
@@ -137,16 +150,20 @@ export class AutonomousWorker {
   }
 
   /**
-   * Recupera subtarefas que ficaram presas em 'running' além do TASK_TIMEOUT_MS (BKL-005).
+   * Recupera subtarefas e tarefas standalone que ficaram presas em 'running' além do TASK_TIMEOUT_MS (S5-02).
    */
   public async recoverStuckTasks(timeoutMs: number = env.TASK_TIMEOUT_MS): Promise<number> {
-    const cutoffIso = new Date(Date.now() - timeoutMs).toISOString();
+    const cutoffTime = Date.now() - timeoutMs;
+
+    // S5-02: Universal Watchdog
+    // Busca tarefas em 'running' que NÃO sejam objetivos macro (exclui task_type = 'macro_objective')
+    // Remove o filtro restritivo de parent_task_id para recuperar também tarefas standalone
     const { data: stuckTasks, error } = await supabase
       .from('tasks')
       .select('*')
       .eq('status', TaskStatus.RUNNING)
-      .not('parent_task_id', 'is', null)
-      .lt('started_at', cutoffIso);
+      .neq('task_type', 'macro_objective')
+      .limit(20);
 
     if (error || !stuckTasks || stuckTasks.length === 0) {
       return 0;
@@ -155,20 +172,33 @@ export class AutonomousWorker {
     let recovered = 0;
     for (const raw of stuckTasks) {
       const task = raw as TaskModel;
+
+      // S5-02: Trata started_at nulo utilizando created_at como fallback (COALESCE)
+      const effectiveStart = new Date(task.started_at || task.created_at).getTime();
+      if (effectiveStart > cutoffTime) {
+        continue;
+      }
+
       if (task.retry_count < task.max_retries) {
-        await supabase
+        console.warn(`[AutonomousWorker] Watchdog recovering task ${task.task_code} (attempt ${task.retry_count + 1}/${task.max_retries})`);
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             status: TaskStatus.PENDING,
             retry_count: task.retry_count + 1,
             input_payload: {
               ...(task.input_payload || {}),
-              recovery_reason: `Recuperada por timeout após ${Math.round(timeoutMs / 1000)}s em execução.`
+              lease_token: null, // S5-03: Invalida lease do worker antigo/zumbi
+              recovery_reason: `Recuperada por watchdog após timeout (${Math.round(timeoutMs / 1000)}s em execução).`
             }
           })
-          .eq('id', task.id);
+          .eq('id', task.id)
+          .eq('status', TaskStatus.RUNNING);
+
+        if (!updateErr) recovered++;
       } else {
-        await supabase
+        console.error(`[AutonomousWorker] Watchdog marking task ${task.task_code} as FAILED (retries exhausted)`);
+        const { error: updateErr } = await supabase
           .from('tasks')
           .update({
             status: TaskStatus.FAILED,
@@ -176,16 +206,38 @@ export class AutonomousWorker {
               error: `Tarefa excedeu o tempo limite (${Math.round(timeoutMs / 1000)}s) e o máximo de tentativas (${task.max_retries}).`
             }
           })
-          .eq('id', task.id);
+          .eq('id', task.id)
+          .eq('status', TaskStatus.RUNNING);
+
+        if (!updateErr) recovered++;
       }
-      recovered++;
+    }
+
+    // S5-02 / S5-01: Recupera tarefas-mãe travadas em 'synthesizing' além do timeout
+    const { data: stuckSynthesizing } = await supabase
+      .from('tasks')
+      .select('id, task_code, created_at, started_at')
+      .eq('status', TaskStatus.SYNTHESIZING)
+      .limit(5);
+
+    for (const parent of (stuckSynthesizing || [])) {
+      const effectiveStart = new Date(parent.started_at || parent.created_at).getTime();
+      if (effectiveStart <= cutoffTime) {
+        console.warn(`[AutonomousWorker] Watchdog resetting stalled synthesis on ${parent.task_code} to running`);
+        await supabase
+          .from('tasks')
+          .update({ status: TaskStatus.RUNNING })
+          .eq('id', parent.id)
+          .eq('status', TaskStatus.SYNTHESIZING);
+        recovered++;
+      }
     }
 
     return recovered;
   }
 
   /**
-   * Verifica objetivos macro em 'running' cujas subtarefas filhas já foram 100% concluídas (BKL-001).
+   * Verifica objetivos macro em 'running' cujas subtarefas filhas já foram 100% concluídas (BKL-001 / S5-01).
    */
   public async reconcileCompletedParentObjectives(): Promise<number> {
     const { data: runningParents, error } = await supabase
@@ -210,14 +262,33 @@ export class AutonomousWorker {
   }
 
   /**
-   * Processa uma única tarefa de ponta a ponta.
+   * Processa uma única tarefa de ponta a ponta com proteção de lease contra workers atrasados/zumbis (S5-03).
    */
-  private async processSingleTask(task: TaskModel): Promise<void> {
+  public async processSingleTask(task: TaskModel, leaseToken?: string): Promise<void> {
     console.log(`[AutonomousWorker] Processing task ${task.task_code} (${task.assigned_agent_id})`);
 
     try {
       // 1. Executa o Agente (com ferramentas determinísticas se aplicável)
       const execution = await executeAgentTask(task);
+
+      // S5-03: Checagem de worker zumbi / expiração de lease antes de salvar resultados
+      if (leaseToken) {
+        const { data: currentTask } = await supabase
+          .from('tasks')
+          .select('status, input_payload')
+          .eq('id', task.id)
+          .single();
+
+        const currentLease = currentTask?.input_payload?.lease_token;
+        if (currentTask?.status !== TaskStatus.RUNNING) {
+          console.warn(`[AutonomousWorker] Zombie execution aborted for task ${task.task_code}: current status is '${currentTask?.status}'. Discarding late result.`);
+          return;
+        }
+        if (currentLease && currentLease !== leaseToken) {
+          console.warn(`[AutonomousWorker] Zombie execution aborted for task ${task.task_code}: lease mismatch (current: ${currentLease}, worker: ${leaseToken}). Discarding late result.`);
+          return;
+        }
+      }
 
       // 2. Coloca em 'review' e aciona o AG-008 (QA Gate)
       await supabase
@@ -270,6 +341,15 @@ export class AutonomousWorker {
       if (task.requires_approval || postPolicy.requiresApproval) {
         console.log(`[AutonomousWorker] Task ${task.task_code} requires Level 2 Founder approval.`);
 
+        // S5-03: Verificação de worker zumbi antes de transicionar para WAITING_INPUT
+        if (leaseToken) {
+          const { data: cur } = await supabase.from('tasks').select('status, input_payload').eq('id', task.id).single();
+          if (cur?.status !== TaskStatus.RUNNING && cur?.status !== TaskStatus.REVIEW) {
+            console.warn(`[AutonomousWorker] Late approval request ignored for ${task.task_code} (status is ${cur?.status})`);
+            return;
+          }
+        }
+
         await supabase
           .from('tasks')
           .update({
@@ -294,16 +374,35 @@ export class AutonomousWorker {
         // Dispara notificação externa via n8n webhook se configurado
         this.notifyN8nApproval(task, postPolicy.approvalReason);
       } else {
+        // S5-03: Conclusão atômica com validação de lease contra conclusões tardias/zumbis
+        if (leaseToken) {
+          const { data: cur } = await supabase.from('tasks').select('status, input_payload').eq('id', task.id).single();
+          if (cur?.status !== TaskStatus.RUNNING && cur?.status !== TaskStatus.REVIEW) {
+            console.warn(`[AutonomousWorker] Late completion ignored for ${task.task_code} (status changed to ${cur?.status})`);
+            return;
+          }
+          if (cur?.input_payload?.lease_token && cur.input_payload.lease_token !== leaseToken) {
+            console.warn(`[AutonomousWorker] Late completion ignored for ${task.task_code}: lease mismatch (worker: ${leaseToken}, current: ${cur?.input_payload?.lease_token})`);
+            return;
+          }
+        }
+
         // Nível 0 ou 1: Conclui automaticamente e destrava dependentes!
         console.log(`[AutonomousWorker] Task ${task.task_code} completed successfully.`);
-        await supabase
+        const { data: completedRows } = await supabase
           .from('tasks')
           .update({
             status: TaskStatus.COMPLETED,
             completed_at: new Date().toISOString(),
             qa_review_payload: qaResult
           })
-          .eq('id', task.id);
+          .eq('id', task.id)
+          .select('id');
+
+        if (!completedRows || completedRows.length === 0) {
+          console.warn(`[AutonomousWorker] Failed to mark task ${task.task_code} as completed (already transitioned or reassigned).`);
+          return;
+        }
 
         // Se a tarefa possui tarefa-mãe, verifica se todas as irmãs terminaram para sintetizar
         if (task.parent_task_id) {
@@ -343,7 +442,8 @@ export class AutonomousWorker {
   }
 
   /**
-   * Checa se todas as subtarefas de um objetivo macro terminaram para acionar o AG-001 (Público - BKL-001).
+   * Checa se todas as subtarefas de um objetivo macro terminaram para acionar o AG-001 (S5-01 / BKL-001).
+   * Implementa lock atômico ('synthesizing') para impedir execuções duplicadas e trata subtarefas com falha.
    */
   public async checkAndSynthesizeParent(parentTaskId: string): Promise<boolean> {
     if (!parentTaskId) return false;
@@ -355,13 +455,31 @@ export class AutonomousWorker {
 
     if (!siblings || siblings.length === 0) return false;
 
-    const allDone = siblings.every(s => s.status === TaskStatus.COMPLETED);
-    if (allDone) {
-      console.log(`[AutonomousWorker] All subtasks completed for parent ${parentTaskId}. Synthesizing with AG-001...`);
-      await orchestrator.synthesizeCompletedObjective(parentTaskId);
-      return true;
+    // Todas as subtarefas terminaram se cada uma estiver em estado terminal (COMPLETED ou FAILED)
+    const allTerminal = siblings.every(s => s.status === TaskStatus.COMPLETED || s.status === TaskStatus.FAILED);
+    if (!allTerminal) {
+      return false;
     }
-    return false;
+
+    // S5-01: Lock atômico da tarefa-mãe (transiciona de 'running' para 'synthesizing')
+    const { data: locked, error: lockErr } = await supabase
+      .from('tasks')
+      .update({
+        status: TaskStatus.SYNTHESIZING,
+        started_at: new Date().toISOString()
+      })
+      .eq('id', parentTaskId)
+      .eq('status', TaskStatus.RUNNING)
+      .select('id, task_code');
+
+    if (lockErr || !locked || locked.length === 0) {
+      // Outro worker concorrente ou rotina de reconciliação já realizou o lock da síntese
+      return false;
+    }
+
+    console.log(`[AutonomousWorker] Atomic synthesis lock acquired for parent ${parentTaskId} (${locked[0]?.task_code}). Synthesizing with AG-001...`);
+    await orchestrator.synthesizeCompletedObjective(parentTaskId);
+    return true;
   }
 
   /**
