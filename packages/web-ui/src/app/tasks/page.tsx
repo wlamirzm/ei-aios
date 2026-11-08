@@ -11,6 +11,7 @@ import {
   Send
 } from 'lucide-react';
 import { fetchTasks, createObjective, triggerWorkerCycle } from '@/lib/api-client';
+import { ExecutiveDeliverableView } from '@/components/ExecutiveDeliverableView';
 
 export default function TasksPage() {
   const [viewMode, setViewMode] = useState<'kanban' | 'tree'>('kanban');
@@ -224,11 +225,11 @@ export default function TasksPage() {
 
       {/* MODAL / INSPECTOR DE TASK ENVELOPE */}
       {selectedTask && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-3xl w-full p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div>
-                <span className="font-mono text-xs text-cyan-400">{selectedTask.task_code}</span>
+                <span className="font-mono text-xs text-cyan-400 font-bold">{selectedTask.task_code}</span>
                 <h3 className="text-sm font-bold text-white mt-1">{selectedTask.objective}</h3>
               </div>
               <button onClick={() => setSelectedTask(null)} className="text-slate-400 hover:text-white">
@@ -237,42 +238,38 @@ export default function TasksPage() {
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-xs">
-              <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                 <span className="text-slate-500 block">Agente Responsável:</span>
                 <span className="text-slate-200 font-semibold">{selectedTask.assigned_agent_id}</span>
               </div>
-              <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                 <span className="text-slate-500 block">Status Atual:</span>
                 <span className="text-emerald-400 font-semibold uppercase">{selectedTask.status}</span>
               </div>
-              <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+              <div className="bg-slate-950 p-2.5 rounded-xl border border-slate-800">
                 <span className="text-slate-500 block">Nível de Risco:</span>
                 <span className="text-rose-400 font-semibold">{selectedTask.risk_level}</span>
               </div>
             </div>
 
-            <div>
-              <span className="text-xs font-semibold text-slate-400 block mb-1">
-                Resultado / Entregável do Agente (result_payload & qa_review_payload):
-              </span>
-              <pre className="bg-slate-950 p-4 rounded-lg border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto max-h-80 whitespace-pre-wrap">
-                {JSON.stringify(
-                  {
-                    result_payload: selectedTask.result_payload,
-                    qa_review_payload: selectedTask.qa_review_payload
-                  },
-                  null,
-                  2
-                )}
-              </pre>
-            </div>
+            <ExecutiveDeliverableView
+              title={selectedTask.result_payload?.deliverable_title || selectedTask.objective}
+              subtitle={`Relatório de Execução da Tarefa ${selectedTask.task_code}`}
+              agentId={selectedTask.assigned_agent_id}
+              artifactType={selectedTask.task_type || 'strategic_plan'}
+              taskCode={selectedTask.task_code}
+              createdAt={selectedTask.completed_at || selectedTask.created_at}
+              structuredData={selectedTask.result_payload || {}}
+              qaReview={selectedTask.qa_review_payload || null}
+              compact
+            />
 
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setSelectedTask(null)}
-                className="bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 py-2 rounded-lg"
+                className="bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold px-4 py-2 rounded-xl"
               >
-                Fechar
+                Fechar Documento
               </button>
             </div>
           </div>

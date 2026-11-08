@@ -18,6 +18,7 @@ import {
   KeyRound
 } from 'lucide-react';
 import { chatWithAgent, cleanDatabase, fetchAgents, fetchLlmStatus, setLlmApiKey } from '@/lib/api-client';
+import { CorporateMarkdown } from '@/components/ExecutiveDeliverableView';
 
 interface AgentCard {
   id: string;
@@ -464,10 +465,10 @@ export default function AgentsPage() {
 
       {/* CHAT DRAWER MODAL */}
       {activeChatAgent && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-lg bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-2xl bg-slate-900 border-l border-slate-800 h-full flex flex-col shadow-2xl">
             {/* Header do Chat */}
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/70">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950/40">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400">
                   <Bot className="w-5 h-5" />
@@ -479,7 +480,7 @@ export default function AgentsPage() {
                     </span>
                     <h3 className="font-bold text-sm text-white">{activeChatAgent.name}</h3>
                   </div>
-                  <span className="text-[11px] text-slate-400">{activeChatAgent.model}</span>
+                  <span className="text-[11px] text-slate-400">{activeChatAgent.role} • {activeChatAgent.model}</span>
                 </div>
               </div>
               <button
@@ -491,23 +492,33 @@ export default function AgentsPage() {
             </div>
 
             {/* Mensagens do Chat */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
               {chatMessages.map((msg, i) => (
                 <div
                   key={i}
                   className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
-                  <div
-                    className={`max-w-[85%] rounded-xl px-4 py-2.5 text-xs leading-relaxed whitespace-pre-wrap ${
-                      msg.role === 'user'
-                        ? 'bg-emerald-600 text-white rounded-br-none'
-                        : 'bg-slate-800 text-slate-200 border border-slate-700/80 rounded-bl-none shadow-md'
-                    }`}
-                  >
-                    {msg.text}
-                  </div>
+                  {msg.role === 'user' ? (
+                    <div className="max-w-[85%] rounded-2xl rounded-br-none px-4 py-2.5 text-xs leading-relaxed whitespace-pre-wrap bg-emerald-500 text-slate-950 font-semibold shadow-md">
+                      {msg.text}
+                    </div>
+                  ) : (
+                    <div className="w-full max-w-[94%] rounded-2xl rounded-tl-none overflow-hidden border border-slate-800 bg-slate-950/90 shadow-lg">
+                      <div className="px-4 py-2 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold text-purple-400 uppercase tracking-wider">
+                          {activeChatAgent.id} • {activeChatAgent.name}
+                        </span>
+                        <span className="text-[10px] text-emerald-400 font-semibold">
+                          Briefing Executivo
+                        </span>
+                      </div>
+                      <div className="p-4">
+                        <CorporateMarkdown content={msg.text} compact />
+                      </div>
+                    </div>
+                  )}
                   {msg.tokensUsed !== undefined && (
-                    <span className="text-[10px] text-slate-500 font-mono mt-1">
+                    <span className="text-[10px] text-slate-500 font-mono mt-1 px-1">
                       {msg.tokensUsed} tokens • ${msg.costUsd?.toFixed(5)} USD
                     </span>
                   )}

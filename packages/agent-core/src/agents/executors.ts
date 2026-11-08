@@ -74,13 +74,14 @@ export async function executeAgentTask(task: TaskModel): Promise<AgentExecutionR
   const finalPrompt = `TAREFA OPERACIONAL EI-AIOS:
 ${JSON.stringify(promptContext, null, 2)}
 
-Por favor, execute o objetivo com rigor técnico absoluto.
+Por favor, execute o objetivo com rigor técnico absoluto e formatação executiva corporativa de alto padrão.
 Retorne exclusivamente um objeto JSON válido contendo obrigatoriamente:
-- "deliverable_title": título executivo claro do entregável
-- "executive_summary_markdown": relatório técnico completo em formato Markdown (sem usar a expressão proibida "economia garantida")
-- "assumptions": premissas adotadas
-- "limitations": limitações e ressalvas técnicas
-- além dos campos estruturados específicos da sua análise.`;
+- "deliverable_title": título executivo formal e corporativo do entregável
+- "executive_summary_markdown": documento corporativo completo em Markdown estruturado com seções claras (ex.: "## 1. Sumário Executivo", "## 2. Análise Técnica & Estratégica", "## 3. Quadro de Indicadores / Arquitetura" com tabela Markdown "| Dimensão | Especificação | Impacto |", "## 4. Plano de Ação & Próximos Passos", e callouts "> **Destaque Executivo:** ..."). NUNCA utilize a expressão proibida "economia garantida".
+- "recommended_actions": lista de ações práticas recomendadas
+- "assumptions": lista de premissas técnicas adotadas
+- "limitations": lista de limitações e ressalvas regulatórias
+- além dos campos estruturados específicos da sua especialidade.`;
 
   // 3. Invocação ao Gemini
   const response = await geminiService.generateStructuredContent({
@@ -128,8 +129,8 @@ Retorne exclusivamente um objeto JSON válido contendo obrigatoriamente:
 
     const title = outputPayload.deliverable_title || `${task.assigned_agent_id} — ${task.objective.slice(0, 80)}`;
     const mdBody = outputPayload.executive_summary_markdown
-      ? `${outputPayload.executive_summary_markdown}\n\n---\n### Dados Estruturados (JSON)\n\`\`\`json\n${JSON.stringify(outputPayload, null, 2)}\n\`\`\``
-      : `# ${title}\n\n**Agente Responsável:** ${task.assigned_agent_id}\n**Objetivo:** ${task.objective}\n\n\`\`\`json\n${JSON.stringify(outputPayload, null, 2)}\n\`\`\``;
+      ? outputPayload.executive_summary_markdown
+      : `# ${title}\n\n> **Agente Responsável:** ${task.assigned_agent_id} • **Objetivo:** ${task.objective}\n\n## Sumário Executivo\nEntregável técnico concluído e estruturado conforme padrões corporativos da Energy Intelligence.`;
 
     await createAndSaveArtifact({
       taskId: task.id,

@@ -382,6 +382,8 @@ export class GeminiService {
         let lastErr: any = null;
         let succeeded = false;
 
+        const corporateInstruction = `${params.systemInstruction}\n\nDIRETRIZ DE ESTILO E FORMATAÇÃO CORPORATIVA:\n- Se o usuário enviar apenas uma saudação curta (ex.: "Bom dia", "Boa noite", "Olá"), responda de forma cordial, breve e executiva se colocando à disposição.\n- Para perguntas estratégicas, técnicas ou de planejamento, estruture sua resposta em formato de Briefing Executivo Corporativo moderno utilizando Markdown: seções claras ("##"), tabelas comparativas ("| Coluna | ... |") quando pertinente, destaques executivos ("> **Destaque Executivo:** ...") e lista numerada de próximos passos.`;
+
         for (const candidateModel of candidates) {
           try {
             modelUsed = candidateModel;
@@ -389,7 +391,7 @@ export class GeminiService {
               model: candidateModel,
               contents,
               config: {
-                systemInstruction: params.systemInstruction,
+                systemInstruction: corporateInstruction,
                 temperature: 0.3
               }
             });
