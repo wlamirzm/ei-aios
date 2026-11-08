@@ -24,6 +24,7 @@ const EnvSchema = z.object({
   SUPABASE_STORAGE_BUCKET: z.string().default('ei-artifacts'),
   
   EMAIL_SECRET_KEY: z.string().optional(),
+  EMAIL_AUTO_SYNC_MINUTES: z.coerce.number().default(15),
   ADMIN_API_TOKEN: z.string().default('ei-aios-founder-sovereign-v1'),
   FOUNDER_EMAIL: z.string().default('fundador@energyintelligence.com.br'),
   FOUNDER_PASSWORD: z.string().default('EI-AIOS-2026!'),

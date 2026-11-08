@@ -9,6 +9,7 @@ import { getAgentDefinition } from './registry.js';
 import { runEnergyAudit } from '../tools/energy-calculator.js';
 import { calculateMeasurementAndVerification } from '../tools/mv-calculator.js';
 import { runFullCfoSnapshot, ClientFinancialContractInput } from '../tools/finops-calculator.js';
+import { validateExtractedBillIntegrity } from '../tools/bill-parser.js';
 import { formatEnergyDiagnosisMarkdown, createAndSaveArtifact } from '../tools/artifact-writer.js';
 
 export interface AgentExecutionResult {
@@ -107,6 +108,29 @@ export async function executeAgentTask(task: TaskModel): Promise<AgentExecutionR
     deterministicContext = {
       cfo_deliverable: cfoSnapshot.cfo_deliverable,
       deterministic_cfo_snapshot: cfoSnapshot
+    };
+  } else if (task.assigned_agent_id === AgentId.AG_004) {
+    // AG-004 (BKL-015): Validador determinístico de integridade de fatura (data_validator)
+    const billToValidate = input.extracted_bill || input;
+    const validation = validateExtractedBillIntegrity(billToValidate);
+    deterministicContext = {
+      deterministic_bill_validation: validation
+    };
+  } else if (task.assigned_agent_id === AgentId.AG_009) {
+    // AG-009 (BKL-014): Injeção automática da base regulatória (knowledge_sources)
+    const { data: knowledgeRows } = await supabase
+      .from('knowledge_sources')
+      .select('source_type, source_name, distributor, document_id, structured_content, metadata')
+      .order('created_at', { ascending: false });
+
+    const distHint = String(input.distributor || '').toLowerCase();
+    const relevantSources = (knowledgeRows || []).filter((k: any) => {
+      if (!k.distributor) return true; // normas federais / ANEEL gerais
+      return distHint ? String(k.distributor).toLowerCase().includes(distHint) : true;
+    });
+
+    deterministicContext = {
+      regulatory_knowledge: relevantSources.length > 0 ? relevantSources : knowledgeRows || []
     };
   }
 

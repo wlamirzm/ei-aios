@@ -10,11 +10,17 @@ import { policyEngine } from './policy-engine.js';
 import { qaGate } from './qa-gate.js';
 import { executeAgentTask } from '../agents/executors.js';
 import { orchestrator } from './orchestrator.js';
+import {
+  fetchImapEmailsFromHostgator,
+  processAndSaveEmailMessage,
+  EmailAccountRow
+} from '../tools/email-intelligence.js';
 
 export class AutonomousWorker {
   private isRunning: boolean = false;
   private isProcessingCycle: boolean = false;
   private intervalHandle: NodeJS.Timeout | null = null;
+  private lastEmailSyncTimestamp: number = 0;
 
   start(): void {
     if (this.isRunning) return;
@@ -71,6 +77,7 @@ export class AutonomousWorker {
       // 0. Recuperação de tarefas presas por timeout e reconciliação de tarefas-mãe
       await this.recoverStuckTasks().catch(() => {});
       await this.reconcileCompletedParentObjectives().catch(() => {});
+      await this.checkAndTriggerScheduledEmailSync().catch(() => {});
 
       // 1. Busca tarefas com status = 'pending'
       const { data: pendingTasks, error } = await supabase
@@ -355,6 +362,64 @@ export class AutonomousWorker {
       return true;
     }
     return false;
+  }
+
+  /**
+   * BKL-016: Dispara sincronização periódica de e-mails IMAP configurável (EMAIL_AUTO_SYNC_MINUTES).
+   */
+  public async checkAndTriggerScheduledEmailSync(): Promise<number> {
+    const syncIntervalMinutes = env.EMAIL_AUTO_SYNC_MINUTES || 0;
+    if (syncIntervalMinutes <= 0) return 0;
+
+    const intervalMs = syncIntervalMinutes * 60 * 1000;
+    const now = Date.now();
+    if (this.lastEmailSyncTimestamp > 0 && now - this.lastEmailSyncTimestamp < intervalMs) {
+      return 0;
+    }
+
+    this.lastEmailSyncTimestamp = now;
+    return await this.syncAllActiveEmailAccounts();
+  }
+
+  public async syncAllActiveEmailAccounts(): Promise<number> {
+    try {
+      const { data: accounts, error } = await supabase
+        .from('email_accounts')
+        .select('*')
+        .eq('enabled', true);
+
+      if (error || !accounts || accounts.length === 0) return 0;
+
+      let totalSynced = 0;
+      for (const rawAcc of accounts) {
+        const account = rawAcc as EmailAccountRow;
+        try {
+          const rawEmails = await fetchImapEmailsFromHostgator(account);
+          for (const raw of rawEmails) {
+            await processAndSaveEmailMessage(account, raw);
+            totalSynced++;
+          }
+          await supabase
+            .from('email_accounts')
+            .update({
+              last_synced_at: new Date().toISOString(),
+              last_sync_status: `Sincronização agendada OK (${rawEmails.length} e-mails lidos)`
+            })
+            .eq('id', account.id);
+        } catch (err: any) {
+          await supabase
+            .from('email_accounts')
+            .update({
+              last_synced_at: new Date().toISOString(),
+              last_sync_status: `Alerta IMAP: ${err.message || 'Falha de conexão'}`
+            })
+            .eq('id', account.id);
+        }
+      }
+      return totalSynced;
+    } catch {
+      return 0;
+    }
   }
 
   /**

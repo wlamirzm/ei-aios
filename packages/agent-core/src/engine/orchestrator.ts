@@ -165,6 +165,31 @@ Sua missão como AG-001 (AI Orchestrator):
       }
     }
 
+    // BKL-016: Registro auditável em decision_logs (Seção 5.2 do Documento de Validação)
+    try {
+      await supabase.from('decision_logs').insert({
+        parent_task_id: parentTaskId,
+        agent_id: AgentId.AG_001,
+        decision_type: 'decomposition_plan',
+        decision_summary: `Decomposição do objetivo macro "${input.objective}" em ${plan.decomposed_tasks.length} subtarefas atômicas.`,
+        rationales: [plan.reasoning_summary],
+        alternatives_considered: [
+          'Execução sequencial monolítica',
+          'Delegação direta sem subtarefas decompostas'
+        ],
+        risk_assessment: {
+          estimated_complexity: plan.estimated_complexity,
+          requires_human_gate: plan.requires_human_gate
+        },
+        metadata: {
+          workflow_code: input.workflowCode || plan.workflow_code || null,
+          client_id: input.clientId || null
+        }
+      });
+    } catch {
+      // Ignora erro caso tabela ainda não exista
+    }
+
     return {
       parentTaskId,
       plan
@@ -255,6 +280,31 @@ Elabore a Síntese Executiva Consolidada do AG-001 retornando um objeto JSON vá
         is_macro_synthesis: true
       }
     }).catch(() => {});
+
+    // BKL-016: Registro auditável em decision_logs da consolidação final
+    try {
+      await supabase.from('decision_logs').insert({
+        parent_task_id: parentTaskId,
+        agent_id: AgentId.AG_001,
+        decision_type: 'synthesis_consolidation',
+        decision_summary: `Consolidação executiva final do objetivo macro "${parentTask.objective}" concluída com êxito pelo AG-001.`,
+        rationales: [
+          `Todas as ${subtasks?.length || 0} subtarefas foram executadas e auditadas com sucesso.`,
+          synthesisData.deliverable_title
+        ],
+        alternatives_considered: [],
+        risk_assessment: {
+          subtasks_count: subtasks?.length || 0,
+          status: 'completed'
+        },
+        metadata: {
+          task_code: parentTask.task_code,
+          completed_at: new Date().toISOString()
+        }
+      });
+    } catch {
+      // Ignora erro caso tabela ainda não exista
+    }
 
     return synthesisData;
   }
