@@ -57,20 +57,20 @@ npm test
 
 ---
 
-## 3. Matriz de Testes Obrigatórios do `AG-011` (Seção 11 — `CFO-001` a `CFO-010`)
+## 3. Matriz de Testes Obrigatórios do `AG-011` (Seção 11 — `CFO-001` a `CFO-010`) — **10/10 APROVADOS NA SPRINT 2**
 
-| ID | Cenário | Critério de Aceite | Status Atual | Ação Necessária no Backlog |
+| ID | Cenário | Critério de Aceite | Status Atual | Evidência Verificada (`finops-calculator.test.ts`) |
 |---|---|---|---|---|
-| `CFO-001` | MRR e ARR | Fórmulas e fontes documentadas (excluindo implantação/success fee) | ⏳ **PENDENTE (`PARCIAL`)** | Implementar em `finops-calculator.ts` (`BKL-006`) |
-| `CFO-002` | CAC | Janela e custos atribuíveis explícitos | ⏳ **PENDENTE (`NÃO IMPLEMENTADO`)** | Implementar em `finops-calculator.ts` (`BKL-006`) |
-| `CFO-003` | LTV | Premissas e limitações declaradas | ⏳ **PENDENTE (`PARCIAL`)** | Implementar em `finops-calculator.ts` (`BKL-006`) |
-| `CFO-004` | Payback | Base de contribuição identificada | ⏳ **PENDENTE (`NÃO IMPLEMENTADO`)** | Implementar em `finops-calculator.ts` (`BKL-006`) |
-| `CFO-005` | Margem por cliente | Custos diretos e IA considerados | ⏳ **PENDENTE (`NÃO IMPLEMENTADO`)** | Cruzar `clients` + `agent_runs` em `finops-calculator.ts` (`BKL-006`) |
-| `CFO-006` | Custos de IA | Conciliação com `agent_runs` | ✅ **APROVADO (`IMPLEMENTADO`)** | Já operacional em `GET /api/v1/metrics/finops` (`routes.ts:301-334`) |
-| `CFO-007` | Success fee | Usa economia verificada e regra contratual | ✅ **APROVADO (`IMPLEMENTADO`)** | Validado por `mv-calculator.test.ts` (`UT-08` e `UT-09`) |
-| `CFO-008` | Cenários de preço | Conservador, base e otimista | ⏳ **PENDENTE (`PARCIAL`)** | Padronizar no `CFODeliverableSchema` (`BKL-007`) |
-| `CFO-009` | Dados incompletos | Não inventa valores (retorna `incomplete` / `not_available`) | ⏳ **PENDENTE (`NÃO IMPLEMENTADO`)** | Implementar validação determinística em `BKL-006` e `BKL-007` |
-| `CFO-010` | Segurança | Não altera nem expõe dados financeiros sem permissão | ⚠️ **PARCIAL** | Proteger rotas e RLS em `BKL-004` |
+| `CFO-001` | MRR e ARR | Fórmulas e fontes documentadas (excluindo implantação/success fee) | ✅ **APROVADO (`IMPLEMENTADO`)** | `calculateMrrAndArr()` exclui `setupFeeBrl` e `successFee` do MRR recorrente (`CFO-001 PASS`) |
+| `CFO-002` | CAC | Janela e custos atribuíveis explícitos | ✅ **APROVADO (`IMPLEMENTADO`)** | `calculateCac()` exige janela explícita (ex.: 90 dias) e custos atribuíveis (`CFO-002 PASS`) |
+| `CFO-003` | LTV | Premissas e limitações declaradas | ✅ **APROVADO (`IMPLEMENTADO`)** | `calculateLtvAndPayback()` sinaliza `status: 'estimated'` e limitação para amostras `< 10` (`CFO-003 PASS`) |
+| `CFO-004` | Payback | Base de contribuição identificada | ✅ **APROVADO (`IMPLEMENTADO`)** | `calculateLtvAndPayback()` calcula `CAC / (ARPA * gross_margin_ratio)` (`CFO-004 PASS`) |
+| `CFO-005` | Margem por cliente | Custos diretos e IA considerados | ✅ **APROVADO (`IMPLEMENTADO`)** | `calculateClientGrossMargin()` cruza receita elegível com suporte direto + `agent_runs` (`CFO-005 PASS`) |
+| `CFO-006` | Custos de IA | Conciliação com `agent_runs` | ✅ **APROVADO (`IMPLEMENTADO`)** | `reconcileAgentRunsFinOps()` soma tokens/custos e aponta execuções sem custo ou vínculo (`CFO-006 PASS`) |
+| `CFO-007` | Success fee | Usa economia verificada e regra contratual | ✅ **APROVADO (`IMPLEMENTADO`)** | `calculateClientGrossMargin()` bloqueia economia não verificada em M&V (`CFO-007 PASS`) |
+| `CFO-008` | Cenários de preço | Conservador, base e otimista | ✅ **APROVADO (`IMPLEMENTADO`)** | `simulatePricingScenarios()` gera os 3 cenários padronizados (`CFO-008 PASS`) |
+| `CFO-009` | Dados incompletos | Não inventa valores (retorna `incomplete` / `not_available`) | ✅ **APROVADO (`IMPLEMENTADO`)** | `calculateCac()` retorna `value: null, status: 'incomplete'` quando faltam dados (`CFO-009 PASS`) |
+| `CFO-010` | Segurança | Não altera nem expõe dados financeiros sem permissão | ✅ **APROVADO (`IMPLEMENTADO`)** | `AG-011` validado com `financial_commitment = false`, `external_publish = false` e `CFODeliverableSchema` (`CFO-010 PASS`) |
 
 ---
 

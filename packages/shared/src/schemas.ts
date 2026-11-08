@@ -302,6 +302,50 @@ export const FinOpsMetricsSchema = z.object({
 });
 
 // ------------------------------------------------------------------------------
+// 8-B. AG-011 CFO DIGITAL & UNIT ECONOMICS DELIVERABLE SCHEMA (Seção 6.8 - BKL-007)
+// ------------------------------------------------------------------------------
+export const CFOMetricStatusSchema = z.enum(['verified', 'estimated', 'incomplete', 'not_available']);
+
+export const CFOMetricItemSchema = z.object({
+  name: z.string(),
+  value: z.number().nullable(),
+  unit: z.string(),
+  formula: z.string(),
+  source_refs: z.array(z.string()).default([]),
+  status: CFOMetricStatusSchema
+});
+
+export const CFOPricingScenarioSchema = z.object({
+  scenario_name: z.enum(['Conservador', 'Base', 'Otimista']),
+  active_clients: z.number().int().nonnegative(),
+  mrr_per_client_brl: z.number().nonnegative(),
+  setup_fee_brl: z.number().nonnegative(),
+  avg_verified_monthly_savings_brl: z.number().nonnegative(),
+  success_fee_percent: z.number().min(0).max(100),
+  monthly_recurring_revenue_brl: z.number().nonnegative(),
+  monthly_success_fee_revenue_brl: z.number().nonnegative(),
+  monthly_total_revenue_brl: z.number().nonnegative(),
+  estimated_gross_margin_percent: z.number()
+});
+
+export const CFODeliverableSchema = z.object({
+  summary: z.string(),
+  period: z.object({
+    start: z.string(),
+    end: z.string(),
+    timezone: z.string().default('America/Sao_Paulo')
+  }),
+  metrics: z.array(CFOMetricItemSchema),
+  scenarios: z.array(CFOPricingScenarioSchema).default([]),
+  risks: z.array(z.string()).default([]),
+  alerts: z.array(z.string()).default([]),
+  assumptions: z.array(z.string()).default([]),
+  limitations: z.array(z.string()).default([]),
+  recommendations: z.array(z.string()).default([]),
+  approval_required: z.boolean().default(false)
+});
+
+// ------------------------------------------------------------------------------
 // 9. API REQUEST / RESPONSE SCHEMAS
 // ------------------------------------------------------------------------------
 export const CreateObjectiveRequestSchema = z.object({

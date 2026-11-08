@@ -20,6 +20,7 @@ import {
   analyzeEmailWithAG012
 } from '../tools/email-intelligence.js';
 import { agentRouter } from './agent-router.js';
+import { DEFAULT_AGENT_REGISTRY } from '../agents/registry.js';
 import { AgentId } from '@ei-aios/shared';
 
 test('SP1-T01 (BKL-002): AES-256-GCM encryptSecret / decryptSecret roundtrip and tamper detection', () => {
@@ -151,7 +152,8 @@ test('SP1-T07 (BKL-005): AgentRouter validates active agents and routes domain s
   const routeBill = await agentRouter.validateAndRouteAgent({
     requestedAgentId: 'AG-003',
     taskType: 'bill_audit',
-    objective: 'Auditar demanda contratada e UFER da fatura Grupo A4'
+    objective: 'Auditar demanda contratada e UFER da fatura Grupo A4',
+    overrideDefinition: DEFAULT_AGENT_REGISTRY[AgentId.AG_003]
   });
   assert.equal(routeBill.effectiveAgentId, AgentId.AG_003);
   assert.equal(routeBill.escalatedToOrchestrator, false);
@@ -159,7 +161,8 @@ test('SP1-T07 (BKL-005): AgentRouter validates active agents and routes domain s
   const routeEmail = await agentRouter.validateAndRouteAgent({
     requestedAgentId: 'AG-012',
     taskType: 'email_triage',
-    objective: 'Analisar caixa de entrada IMAP HostGator'
+    objective: 'Analisar caixa de entrada IMAP HostGator',
+    overrideDefinition: DEFAULT_AGENT_REGISTRY[AgentId.AG_012]
   });
   assert.equal(routeEmail.effectiveAgentId, AgentId.AG_012);
   assert.equal(routeEmail.escalatedToOrchestrator, false);

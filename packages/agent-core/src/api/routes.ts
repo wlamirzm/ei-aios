@@ -18,6 +18,7 @@ import { autonomousWorker } from '../engine/worker.js';
 import { workflowRunner } from '../engine/workflow-runner.js';
 import { parseEnergyBill } from '../tools/bill-parser.js';
 import { runEnergyAudit } from '../tools/energy-calculator.js';
+import { runFullCfoSnapshot, ClientFinancialContractInput } from '../tools/finops-calculator.js';
 import {
   fetchImapEmailsFromHostgator,
   processAndSaveEmailMessage,
@@ -385,6 +386,49 @@ apiRouter.get('/api/v1/metrics/finops', async (_req: Request, res: Response, nex
     const totalArtifacts = artifactCount || 1;
     const costPerArtifact = totalSpendUsd / totalArtifacts;
 
+    // 6. BKL-008: Unit Economics Reais do AG-011 (CFO Digital)
+    const [{ data: clientsRows }, { data: ucsRows }, { data: billsRows }] = await Promise.all([
+      supabase.from('clients').select('*'),
+      supabase.from('consumer_units').select('id, client_id'),
+      supabase.from('energy_bills').select('consumer_unit_id, potential_savings_brl, validation_status')
+    ]);
+
+    const contracts: ClientFinancialContractInput[] = (clientsRows || []).map((c: any) => {
+      const clientUcs = (ucsRows || []).filter((u: any) => u.client_id === c.id);
+      const clientUcIds = new Set(clientUcs.map((u: any) => u.id));
+      const clientBills = (billsRows || []).filter((b: any) => clientUcIds.has(b.consumer_unit_id));
+
+      const verifiedSavings = clientBills
+        .filter((b: any) => b.validation_status === 'verified_mv')
+        .reduce((acc: number, b: any) => acc + Number(b.potential_savings_brl || 0), 0);
+
+      const unverifiedSavings = clientBills
+        .filter((b: any) => b.validation_status !== 'verified_mv')
+        .reduce((acc: number, b: any) => acc + Number(b.potential_savings_brl || 0), 0);
+
+      return {
+        clientId: c.id,
+        companyName: c.company_name || 'Cliente',
+        isActive: c.stage !== 'churned',
+        mrrBrl: Number(c.mrr_brl ?? 1490),
+        setupFeeBrl: Number(c.setup_fee_brl ?? 2500),
+        successFeePercent: Number(c.success_fee_percent ?? 20),
+        verifiedMonthlySavingsBrl: verifiedSavings,
+        unverifiedEstimatedSavingsBrl: unverifiedSavings,
+        directMonthlySupportCostBrl: Number(c.direct_monthly_cost_brl ?? 180),
+        consumerUnitsCount: Math.max(1, clientUcs.length)
+      };
+    });
+
+    const cfoSnapshot = runFullCfoSnapshot({
+      contracts,
+      agentRuns: runsList as any[]
+    });
+
+    const recentRuns = [...runsList]
+      .sort((a: any, b: any) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+      .slice(0, 10);
+
     res.json({
       completion_rate_percent: Math.round(completionRate * 10) / 10,
       qa_rework_rate_percent: Math.round(qaReworkRate * 10) / 10,
@@ -395,7 +439,9 @@ apiRouter.get('/api/v1/metrics/finops', async (_req: Request, res: Response, nex
       total_token_spend_usd_month: Math.round(totalSpendUsd * 10000) / 10000,
       cost_per_artifact_usd: Math.round(costPerArtifact * 10000) / 10000,
       total_tasks_count: totalTasks,
-      total_runs_count: totalRunsCount
+      total_runs_count: totalRunsCount,
+      cfo_unit_economics: cfoSnapshot,
+      recent_runs: recentRuns
     });
   } catch (error) {
     next(error);

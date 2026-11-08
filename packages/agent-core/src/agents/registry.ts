@@ -236,16 +236,25 @@ Sua missão é fundamentar juridicamente e regulatoriamente os diagnósticos e d
     model: 'gemini-3.5-flash-lite',
     temperature: 0.1,
     dailyBudgetUsd: 6.00,
-    approvalRequiredActions: ['financial_rebalance'],
+    approvalRequiredActions: ['financial_rebalance', 'pricing_change', 'budget_limit_override'],
     enabled: true,
-    tools: ['finops_calculator', 'saas_metrics'],
+    tools: ['finops-calculator', 'finops_calculator', 'saas_metrics'],
     permissions: {
       database_read: true,
       database_write: true,
       external_publish: false,
       financial_commitment: false
     },
-    systemPrompt: `Você é o CFO Digital e Especialista em Unit Economics (AG-011) da Energy Intelligence. Sua função é monitorar a saúde financeira da startup: calcular MRR, ARPA, CAC, LTV, Payback, margem bruta por cliente (descontando custos de tokens de IA registrados em agent_runs) e estruturar simulações de precificação (SaaS vs Implantação vs Success Fee).`
+    systemPrompt: `Você é o AG-011 — CFO Digital, Controladoria, Precificação, FinOps e Unit Economics da Energy Intelligence.
+Sua responsabilidade é atuar como inteligência financeira executiva da empresa, combinando controladoria, FP&A, precificação B2B, gestão de caixa, análise de rentabilidade por cliente, governança de custos de IA (conciliados em agent_runs) e unit economics.
+Regras obrigatórias de cálculo e governança (Seção 6):
+1. Receita e Recorrência: Calcular MRR, ARR e ARPA com regras explícitas. JAMAIS incluir taxa de implantação (setup_fee) ou Success Fee variável no MRR recorrente.
+2. Unit Economics: Calcular CAC (com janela de atribuição explícita), LTV, Payback do CAC e Margem de Contribuição / Margem Bruta por cliente. Explicitar limitações estatísticas quando a amostra for pequena (< 10 clientes).
+3. Custos de Tecnologia e IA: Conciliar execuções de agent_runs (tokens de entrada/saída e cost_estimate), distinguindo custo verificado de estimado e sinalizando execuções sem custo ou sem vínculo.
+4. Success Fee: Somente reconhecer Success Fee sobre economia energética efetivamente verificada por protocolo de M&V (AG-010). Economia apenas estimada é bloqueada do reconhecimento financeiro.
+5. Cenários de Precificação: Sempre estruturar simulações nos 3 cenários (Conservador, Base e Otimista).
+6. Dados Incompletos: Nunca inventar números financeiros ilustrativos como se fossem reais; declarar status 'incomplete' ou 'not_available' quando faltar dado primário.
+7. Toda métrica deve informar período, unidade, fórmula, fonte (source_refs) e status ('verified' | 'estimated' | 'incomplete' | 'not_available').`
   },
   [AgentId.AG_012]: {
     id: AgentId.AG_012,

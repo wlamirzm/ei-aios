@@ -4,9 +4,11 @@
 
 import { AgentId, TaskModel } from '@ei-aios/shared';
 import { geminiService } from '../config/gemini.js';
+import { supabase } from '../config/supabase.js';
 import { getAgentDefinition } from './registry.js';
 import { runEnergyAudit } from '../tools/energy-calculator.js';
 import { calculateMeasurementAndVerification } from '../tools/mv-calculator.js';
+import { runFullCfoSnapshot, ClientFinancialContractInput } from '../tools/finops-calculator.js';
 import { formatEnergyDiagnosisMarkdown, createAndSaveArtifact } from '../tools/artifact-writer.js';
 
 export interface AgentExecutionResult {
@@ -58,6 +60,54 @@ export async function executeAgentTask(task: TaskModel): Promise<AgentExecutionR
       successFeePercent: Number(input.success_fee_percent || 20.00)
     });
     deterministicContext = { deterministic_mv: mvResult };
+  } else if (task.assigned_agent_id === AgentId.AG_011) {
+    // AG-011 (BKL-006 & BKL-007): Executa finops-calculator.ts com dados reais do PostgreSQL
+    const [{ data: clientsRows }, { data: ucsRows }, { data: billsRows }, { data: runsRows }] = await Promise.all([
+      supabase.from('clients').select('*'),
+      supabase.from('consumer_units').select('id, client_id'),
+      supabase.from('energy_bills').select('consumer_unit_id, potential_savings_brl, validation_status'),
+      supabase.from('agent_runs').select('*')
+    ]);
+
+    const contracts: ClientFinancialContractInput[] = (clientsRows || []).map((c: any) => {
+      const clientUcs = (ucsRows || []).filter((u: any) => u.client_id === c.id);
+      const clientUcIds = new Set(clientUcs.map((u: any) => u.id));
+      const clientBills = (billsRows || []).filter((b: any) => clientUcIds.has(b.consumer_unit_id));
+
+      const verifiedSavings = clientBills
+        .filter((b: any) => b.validation_status === 'verified_mv')
+        .reduce((acc: number, b: any) => acc + Number(b.potential_savings_brl || 0), 0);
+
+      const unverifiedSavings = clientBills
+        .filter((b: any) => b.validation_status !== 'verified_mv')
+        .reduce((acc: number, b: any) => acc + Number(b.potential_savings_brl || 0), 0);
+
+      return {
+        clientId: c.id,
+        companyName: c.company_name || 'Cliente',
+        isActive: c.stage !== 'churned',
+        mrrBrl: Number(c.mrr_brl ?? 1490),
+        setupFeeBrl: Number(c.setup_fee_brl ?? 2500),
+        successFeePercent: Number(c.success_fee_percent ?? 20),
+        verifiedMonthlySavingsBrl: Number(input.verified_monthly_savings_brl ?? verifiedSavings),
+        unverifiedEstimatedSavingsBrl: Number(input.unverified_estimated_savings_brl ?? unverifiedSavings),
+        directMonthlySupportCostBrl: Number(c.direct_monthly_cost_brl ?? 180),
+        consumerUnitsCount: Math.max(1, clientUcs.length)
+      };
+    });
+
+    const cfoSnapshot = runFullCfoSnapshot({
+      contracts,
+      agentRuns: (runsRows || []) as any[],
+      marketingAndSalesSpendBrl: input.marketing_spend_brl ?? null,
+      newClientsAcquired: input.new_clients_acquired ?? null,
+      monthlyChurnRate: Number(input.monthly_churn_rate ?? 0)
+    });
+
+    deterministicContext = {
+      cfo_deliverable: cfoSnapshot.cfo_deliverable,
+      deterministic_cfo_snapshot: cfoSnapshot
+    };
   }
 
   // 2. Constrói o Prompt contextualizado para a Gemini API
