@@ -93,3 +93,4 @@ Cliente API: `packages/web-ui/src/lib/api-client.ts`
 - **Git Branch:** `feat/sprint-6-finops-ledger`.
 - **Branch `main`:** Não modificada.
 - **Total de Testes:** 117/117 testes passando (100% verde).
+
