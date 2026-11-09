@@ -1414,5 +1414,127 @@ apiRouter.get('/api/v1/finops/dashboard/cost-usage', async (req: Request, res: R
   }
 });
 
+// ------------------------------------------------------------------------------
+// CLIENT FLOW: Consumer Units, Report Generation & Public Report Access
+// ------------------------------------------------------------------------------
 
+apiRouter.get('/api/v1/consumer-units', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data: units, error } = await supabase
+      .from('consumer_units')
+      .select('*, client:clients(id, company_name, cnpj, segment)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      res.status(500).json({ error: 'Falha ao buscar unidades consumidoras' });
+      return;
+    }
+
+    res.json({ success: true, data: units || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/api/v1/reports/generate', requireFounderAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { bill_id } = req.body || {};
+    if (!bill_id) {
+      res.status(400).json({ error: 'bill_id é obrigatório' });
+      return;
+    }
+
+    const { data: bill, error: billErr } = await supabase
+      .from('energy_bills')
+      .select('id')
+      .eq('id', bill_id)
+      .single();
+
+    if (billErr || !bill) {
+      res.status(404).json({ error: 'Fatura não encontrada' });
+      return;
+    }
+
+    const { data: report, error: reportErr } = await supabase
+      .from('diagnostic_reports')
+      .insert({ energy_bill_id: bill_id })
+      .select('token, expires_at, created_at')
+      .single();
+
+    if (reportErr) {
+      res.status(500).json({ error: 'Falha ao gerar relatório', details: reportErr.message });
+      return;
+    }
+
+    res.json({
+      success: true,
+      token: report.token,
+      expires_at: report.expires_at,
+      created_at: report.created_at
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/api/v1/reports/:token', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { token } = req.params;
+
+    const { data: report, error: reportErr } = await supabase
+      .from('diagnostic_reports')
+      .select('*, bill:energy_bills(*, consumer_unit:consumer_units(*, client:clients(company_name, cnpj, segment)))')
+      .eq('token', token)
+      .single();
+
+    if (reportErr || !report) {
+      res.status(404).json({ error: 'Relatório não encontrado' });
+      return;
+    }
+
+    if (new Date(report.expires_at) < new Date()) {
+      res.status(410).json({ error: 'Este relatório expirou' });
+      return;
+    }
+
+    const bill = report.bill;
+    res.json({
+      success: true,
+      data: {
+        report_id: report.id,
+        created_at: report.created_at,
+        expires_at: report.expires_at,
+        bill: {
+          id: bill.id,
+          billing_period: bill.billing_period,
+          due_date: bill.due_date,
+          total_amount_brl: bill.total_amount_brl,
+          consumption_peak_kwh: bill.consumption_peak_kwh,
+          consumption_offpeak_kwh: bill.consumption_offpeak_kwh,
+          measured_demand_peak_kw: bill.measured_demand_peak_kw,
+          measured_demand_offpeak_kw: bill.measured_demand_offpeak_kw,
+          potential_savings_brl: bill.potential_savings_brl,
+          deterministic_audit_json: bill.deterministic_audit_json,
+          taxes_breakdown: bill.taxes_breakdown
+        },
+        consumer_unit: bill.consumer_unit ? {
+          uc_code: bill.consumer_unit.uc_code,
+          unit_name: bill.consumer_unit.unit_name,
+          distributor: bill.consumer_unit.distributor,
+          tariff_group: bill.consumer_unit.tariff_group,
+          tariff_modality: bill.consumer_unit.tariff_modality,
+          contracted_demand_peak_kw: bill.consumer_unit.contracted_demand_peak_kw,
+          contracted_demand_offpeak_kw: bill.consumer_unit.contracted_demand_offpeak_kw
+        } : null,
+        client: bill.consumer_unit?.client ? {
+          company_name: bill.consumer_unit.client.company_name,
+          cnpj: bill.consumer_unit.client.cnpj,
+          segment: bill.consumer_unit.client.segment
+        } : null
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
