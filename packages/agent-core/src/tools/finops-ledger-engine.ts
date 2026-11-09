@@ -50,15 +50,19 @@ export function resolveModelPricing(
     return matrix.models[modelName];
   }
 
-  // 2. Busca por substring normalizada
+  // 2. Busca por substring normalizada (input contém a key, longest match wins)
   const normalized = modelName.toLowerCase();
+  let bestMatch: ModelPricingItem | null = null;
+  let bestKeyLen = 0;
   for (const [key, item] of Object.entries(matrix.models)) {
-    if (normalized.includes(key.toLowerCase()) || key.toLowerCase().includes(normalized)) {
-      return item;
+    const keyLower = key.toLowerCase();
+    if (normalized.includes(keyLower) && keyLower.length > bestKeyLen) {
+      bestMatch = item;
+      bestKeyLen = keyLower.length;
     }
   }
 
-  return null;
+  return bestMatch;
 }
 
 // ==============================================================================

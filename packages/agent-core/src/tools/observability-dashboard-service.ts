@@ -73,6 +73,7 @@ export interface CostAndUsageView {
     client_attributable: { count: number; cost_usd: number };
     platform_internal: { count: number; cost_usd: number };
     unattributed_legacy: { count: number; cost_usd: number };
+    unattributed_orphan: { count: number; cost_usd: number };
   };
   entries: any[];
 }
@@ -223,7 +224,7 @@ export class ObservabilityDashboardService {
     const cac90 = this.unitEconomicsEngine.calculateRealCac({ windowDays: 90, tenantId, referenceDate });
 
     const totalSmSpend = cac90.total_eligible_spend_brl;
-    const totalOperatingCosts = round2(totalAiBrl);
+    const totalOperatingCosts = round2(totalAiBrl + totalSmSpend);
 
     // 4. Rentabilidade
     const marginOnInvoiced = round2(totalInvoiced - totalOperatingCosts);
@@ -323,7 +324,8 @@ export class ObservabilityDashboardService {
     const byCategory = {
       client_attributable: { count: 0, cost_usd: 0 },
       platform_internal: { count: 0, cost_usd: 0 },
-      unattributed_legacy: { count: 0, cost_usd: 0 }
+      unattributed_legacy: { count: 0, cost_usd: 0 },
+      unattributed_orphan: { count: 0, cost_usd: 0 }
     };
 
     let totalUsd = 0;
@@ -383,6 +385,9 @@ export class ObservabilityDashboardService {
       } else if (e.category === 'platform_internal') {
         byCategory.platform_internal.count++;
         byCategory.platform_internal.cost_usd = round4(byCategory.platform_internal.cost_usd + usd);
+      } else if (e.category === 'unattributed_orphan') {
+        byCategory.unattributed_orphan.count++;
+        byCategory.unattributed_orphan.cost_usd = round4(byCategory.unattributed_orphan.cost_usd + usd);
       } else {
         byCategory.unattributed_legacy.count++;
         byCategory.unattributed_legacy.cost_usd = round4(byCategory.unattributed_legacy.cost_usd + usd);

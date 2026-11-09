@@ -21,7 +21,9 @@ import { runEnergyAudit } from '../tools/energy-calculator.js';
 import {
   runFullCfoSnapshot,
   ClientFinancialContractInput,
-  ObservabilityDashboardService
+  ObservabilityDashboardService,
+  RevenuePipelineEngine,
+  UnitEconomicsEngine
 } from '../tools/finops-calculator.js';
 import {
   fetchImapEmailsFromHostgator,
@@ -1324,18 +1326,57 @@ apiRouter.get('/api/v1/decisions', async (req: Request, res: Response, next: Nex
 // ------------------------------------------------------------------------------
 // S6-05: OBSERVABILITY FINOPS DASHBOARD (AG-011 CFO DIGITAL)
 // ------------------------------------------------------------------------------
+
+async function buildDashboardService(options?: { competence?: string; tenantId?: string }) {
+  let runsQuery = supabase.from('agent_runs').select('*');
+  if (options?.competence && /^\d{4}-\d{2}$/.test(options.competence)) {
+    const parts = options.competence.split('-').map(Number);
+    const y = parts[0]!;
+    const m = parts[1]!;
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    runsQuery = runsQuery
+      .gte('created_at', `${options.competence}-01T00:00:00.000Z`)
+      .lte('created_at', `${options.competence}-${String(lastDay).padStart(2, '0')}T23:59:59.999Z`);
+  }
+  const { data: runsRows } = await runsQuery.limit(5000);
+
+  const [contractsRes, invoicesRes, receiptsRes, acqExpRes, opExpRes] = await Promise.all([
+    supabase.from('client_contracts').select('*'),
+    supabase.from('revenue_invoices').select('*'),
+    supabase.from('revenue_receipts').select('*'),
+    supabase.from('acquisition_expenses').select('*'),
+    supabase.from('operational_expenses').select('*'),
+  ]);
+
+  const revenueEngine = new RevenuePipelineEngine({
+    contracts: contractsRes.data || [],
+    invoices: invoicesRes.data || [],
+    receipts: receiptsRes.data || [],
+  });
+
+  const unitEconomicsEngine = new UnitEconomicsEngine({
+    acquisitionExpenses: acqExpRes.data || [],
+    operationalExpenses: opExpRes.data || [],
+  });
+
+  const dashboardService = new ObservabilityDashboardService({
+    revenueEngine,
+    unitEconomicsEngine,
+  });
+
+  if (runsRows && runsRows.length > 0) {
+    dashboardService.getLedgerEngine().reconcileRuns(runsRows as any[]);
+  }
+
+  return dashboardService;
+}
+
 apiRouter.get('/api/v1/finops/dashboard/overview', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const competence = req.query.competence ? String(req.query.competence) : undefined;
     const tenantId = req.query.tenant_id ? String(req.query.tenant_id) : 'default_tenant';
 
-    const { data: runsRows } = await supabase.from('agent_runs').select('*').limit(300);
-
-    const dashboardService = new ObservabilityDashboardService();
-    if (runsRows && runsRows.length > 0) {
-      dashboardService.getLedgerEngine().reconcileRuns(runsRows as any[]);
-    }
-
+    const dashboardService = await buildDashboardService({ competence, tenantId });
     const overview = dashboardService.getExecutiveOverview({ competence, tenantId });
     res.json({
       success: true,
@@ -1348,19 +1389,14 @@ apiRouter.get('/api/v1/finops/dashboard/overview', async (req: Request, res: Res
 
 apiRouter.get('/api/v1/finops/dashboard/cost-usage', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const competence = req.query.competence ? String(req.query.competence) : undefined;
     const clientId = req.query.client_id ? String(req.query.client_id) : undefined;
     const agentId = req.query.agent_id ? String(req.query.agent_id) : undefined;
     const modelName = req.query.model ? String(req.query.model) : undefined;
     const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
     const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
 
-    const { data: runsRows } = await supabase.from('agent_runs').select('*').limit(300);
-
-    const dashboardService = new ObservabilityDashboardService();
-    if (runsRows && runsRows.length > 0) {
-      dashboardService.getLedgerEngine().reconcileRuns(runsRows as any[]);
-    }
-
+    const dashboardService = await buildDashboardService({ competence });
     const details = dashboardService.getCostAndUsageDetails({
       clientId,
       agentId,

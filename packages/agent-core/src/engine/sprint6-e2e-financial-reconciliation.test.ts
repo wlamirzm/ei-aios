@@ -199,14 +199,14 @@ describe('Sprint 6 — S6-06 E2E Financial Reconciliation & Audit Suite (E2E-01 
     assert.equal(overview.costs.ai_spend_usd, 0.0630);
     assert.equal(overview.costs.ai_spend_brl, 0.37);
     assert.equal(overview.costs.acquisition_sm_brl, 8000.00);
-    assert.equal(overview.profitability.margin_on_invoiced_brl, 5999.63);
-    assert.equal(overview.profitability.margin_on_received_brl, 4999.63);
+    assert.equal(overview.profitability.margin_on_invoiced_brl, -2000.37);
+    assert.equal(overview.profitability.margin_on_received_brl, -3000.37);
 
     // Unit Economics no Dashboard
     assert.equal(overview.unit_economics.cac_30d_brl, 8000.00);
     assert.equal(overview.unit_economics.cac_90d_brl, 8000.00);
-    assert.equal(typeof overview.unit_economics.ltv_brl, 'number');
-    assert.equal(typeof overview.unit_economics.payback_months, 'number');
+    assert.equal(overview.unit_economics.ltv_brl, null);
+    assert.equal(overview.unit_economics.payback_months, null);
     assert.equal(overview.revenue.reliability, 'measured');
   });
 

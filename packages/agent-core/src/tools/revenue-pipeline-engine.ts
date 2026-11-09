@@ -98,7 +98,16 @@ export class RevenuePipelineEngine {
     if (target < start) return false;
 
     if (contract.end_date) {
-      const end = contract.end_date.length === 7 ? `${contract.end_date}-28` : contract.end_date;
+      let end: string;
+      if (contract.end_date.length === 7) {
+        const parts = contract.end_date.split('-').map(Number);
+        const y = parts[0]!;
+        const m = parts[1]!;
+        const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+        end = `${contract.end_date}-${String(lastDay).padStart(2, '0')}`;
+      } else {
+        end = contract.end_date;
+      }
       if (target > end) return false;
     }
 

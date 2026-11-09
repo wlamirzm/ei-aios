@@ -47,10 +47,10 @@ export default function FinOpsPage() {
       fetchFinOpsMetrics()
     ]).then(([resOverview, resUsage, resMetrics]) => {
       if (resOverview.status === 'fulfilled') {
-        setOverview(resOverview.value);
+        setOverview(resOverview.value?.data ?? resOverview.value);
       }
       if (resUsage.status === 'fulfilled') {
-        setCostUsage(resUsage.value);
+        setCostUsage(resUsage.value?.data ?? resUsage.value);
       }
       if (resMetrics.status === 'fulfilled') {
         setMetrics((prev: any) => ({ ...prev, ...resMetrics.value }));
@@ -301,8 +301,8 @@ export default function FinOpsPage() {
               Consumo por Agente
             </h3>
             <div className="space-y-1.5 font-mono text-xs">
-              {costUsage?.breakdown?.by_agent && Object.keys(costUsage.breakdown.by_agent).length > 0 ? (
-                Object.entries(costUsage.breakdown.by_agent).map(([ag, val]: any) => (
+              {costUsage?.breakdown_by_agent && Object.keys(costUsage.breakdown_by_agent).length > 0 ? (
+                Object.entries(costUsage.breakdown_by_agent).map(([ag, val]: any) => (
                   <div key={ag} className="flex justify-between items-center py-0.5">
                     <span className="text-white font-semibold">{ag} ({val.count}x)</span>
                     <span className="text-emerald-400">US$ {val.cost_usd.toFixed(4)}</span>
@@ -320,8 +320,8 @@ export default function FinOpsPage() {
               Consumo por Modelo
             </h3>
             <div className="space-y-1.5 font-mono text-xs">
-              {costUsage?.breakdown?.by_model && Object.keys(costUsage.breakdown.by_model).length > 0 ? (
-                Object.entries(costUsage.breakdown.by_model).map(([mod, val]: any) => (
+              {costUsage?.breakdown_by_model && Object.keys(costUsage.breakdown_by_model).length > 0 ? (
+                Object.entries(costUsage.breakdown_by_model).map(([mod, val]: any) => (
                   <div key={mod} className="flex justify-between items-center py-0.5">
                     <span className="text-white">{mod}</span>
                     <span className="text-cyan-400">US$ {val.cost_usd.toFixed(4)}</span>
@@ -342,19 +342,25 @@ export default function FinOpsPage() {
               <div className="flex justify-between items-center py-0.5">
                 <span className="text-slate-300">Cliente (Atribuível):</span>
                 <span className="text-emerald-400">
-                  US$ {costUsage?.breakdown?.by_category?.client_attributable?.cost_usd?.toFixed(4) ?? '0.0000'}
+                  US$ {costUsage?.breakdown_by_category?.client_attributable?.cost_usd?.toFixed(4) ?? '0.0000'}
                 </span>
               </div>
               <div className="flex justify-between items-center py-0.5">
                 <span className="text-slate-300">Interno Plataforma:</span>
                 <span className="text-indigo-400">
-                  US$ {costUsage?.breakdown?.by_category?.platform_internal?.cost_usd?.toFixed(4) ?? '0.0000'}
+                  US$ {costUsage?.breakdown_by_category?.platform_internal?.cost_usd?.toFixed(4) ?? '0.0000'}
                 </span>
               </div>
               <div className="flex justify-between items-center py-0.5">
-                <span className="text-amber-400">Não Atribuído (Órfão):</span>
-                <span className="text-amber-400 font-bold">
-                  US$ {costUsage?.breakdown?.by_category?.unattributed_legacy?.cost_usd?.toFixed(4) ?? '0.0000'}
+                <span className="text-slate-300">Não Atribuído (Legado):</span>
+                <span className="text-amber-400">
+                  US$ {costUsage?.breakdown_by_category?.unattributed_legacy?.cost_usd?.toFixed(4) ?? '0.0000'}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-0.5">
+                <span className="text-rose-400">Órfão (Sem Atribuição):</span>
+                <span className="text-rose-400 font-bold">
+                  US$ {costUsage?.breakdown_by_category?.unattributed_orphan?.cost_usd?.toFixed(4) ?? '0.0000'}
                 </span>
               </div>
             </div>

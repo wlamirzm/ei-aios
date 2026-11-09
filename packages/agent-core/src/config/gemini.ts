@@ -351,7 +351,13 @@ export class GeminiService {
 
         const { error: insertErr } = await supabase.from('agent_runs').insert(runPayload);
         if (insertErr) {
-          // Fallback para schema v1.5 caso colunas de migration 0008 ainda não estejam presentes no banco
+          const droppedFields = ['consumer_unit_id', 'execution_id', 'is_internal', 'metadata']
+            .filter(f => (runPayload as any)[f] !== undefined && (runPayload as any)[f] !== null);
+          if (droppedFields.length > 0) {
+            console.warn(
+              `[GeminiService] Primary agent_run insert failed, falling back to v1.5 schema. Dropped fields: [${droppedFields.join(', ')}]. Error: ${insertErr.message || insertErr.code || JSON.stringify(insertErr)}`
+            );
+          }
           const fallbackPayload: Record<string, any> = {
             id: runId,
             agent_id: params.agentId,
