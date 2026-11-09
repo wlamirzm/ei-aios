@@ -424,3 +424,121 @@ export interface RealMarginReport {
   reliability: 'measured' | 'estimated' | 'incomplete';
 }
 
+// ==============================================================================
+// SPRINT 6 S6-04: CAC, LTV & PAYBACK DATA FOUNDATION (UNIT ECONOMICS)
+// ==============================================================================
+
+export type AcquisitionExpenseCategory =
+  | 'SALES'
+  | 'MARKETING'
+  | 'ADVERTISING'
+  | 'SALES_COMMISSIONS'
+  | 'LEAD_GENERATION'
+  | 'EVENTS'
+  | 'CUSTOMER_ACQUISITION_TOOLS'
+  | 'OTHER_ACQUISITION';
+
+export type OperationalExpenseCategory =
+  | 'ONBOARDING'
+  | 'IMPLEMENTATION'
+  | 'CUSTOMER_SUPPORT'
+  | 'OPERATIONAL_SERVICE'
+  | 'THIRD_PARTY_SERVICE'
+  | 'CUSTOMER_SPECIFIC_INFRASTRUCTURE'
+  | 'OTHER_COGS';
+
+export type ExpenseValidationStatus = 'validated' | 'pending' | 'rejected';
+
+export interface ExpenseAuditLogEntry {
+  previous_amount_brl: number;
+  new_amount_brl: number;
+  changed_by: string;
+  reason: string;
+  timestamp: string;
+}
+
+export interface AcquisitionExpenseModel {
+  id: string;
+  tenant_id: string;
+  client_id?: string | null;
+  campaign_id?: string | null;
+  category: AcquisitionExpenseCategory;
+  description: string;
+  amount_brl: number;
+  currency: 'BRL';
+  competence: string; // YYYY-MM
+  payment_date: string; // YYYY-MM-DD
+  document_reference?: string | null;
+  registered_by: string;
+  validation_status: ExpenseValidationStatus;
+  is_shared: boolean;
+  allocation_rule?: string | null;
+  created_at: string;
+  updated_at?: string;
+  history?: ExpenseAuditLogEntry[];
+}
+
+export interface OperationalExpenseModel {
+  id: string;
+  tenant_id: string;
+  client_id?: string | null;
+  consumer_unit_id?: string | null;
+  contract_id?: string | null;
+  category: OperationalExpenseCategory;
+  description: string;
+  amount_brl: number;
+  currency: 'BRL';
+  competence: string; // YYYY-MM
+  payment_date: string; // YYYY-MM-DD
+  document_reference?: string | null;
+  registered_by: string;
+  validation_status: ExpenseValidationStatus;
+  is_shared: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CustomerAcquisitionEvent {
+  id: string;
+  client_id: string;
+  tenant_id: string;
+  acquisition_date: string; // YYYY-MM-DD
+  contract_id?: string | null;
+  channel?: string | null;
+  initial_mrr_brl?: number | null;
+  created_at: string;
+}
+
+export interface RealCacResult {
+  window_days: number;
+  window_start: string;
+  window_end: string;
+  total_eligible_spend_brl: number;
+  new_clients_acquired_count: number;
+  cac_brl: number | null;
+  status: 'measured' | 'estimated' | 'incomplete' | 'unattributed' | 'reconciled';
+  limitation_notes: string[];
+  included_expense_ids: string[];
+  included_client_ids: string[];
+}
+
+export interface RealLtvResult {
+  client_id?: string | null;
+  monthly_contribution_margin_brl: number | null;
+  observed_churn_rate_monthly?: number | null;
+  estimated_lifespan_months: number | null;
+  ltv_brl: number | null;
+  status: 'measured' | 'estimated' | 'incomplete';
+  methodology: string;
+  limitation_notes: string[];
+}
+
+export interface RealPaybackResult {
+  client_id?: string | null;
+  cac_brl: number | null;
+  monthly_contribution_margin_brl: number | null;
+  payback_months: number | null;
+  status: 'measured' | 'estimated' | 'incomplete';
+  limitation_notes: string[];
+}
+
