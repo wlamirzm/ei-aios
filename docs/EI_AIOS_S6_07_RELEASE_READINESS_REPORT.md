@@ -113,3 +113,4 @@ As 4 migrations desenvolvidas na Sprint 6 foram rigorosamente inspecionadas:
 
 - **PARECER:** **CONDITIONAL GO**
 - **Condição:** A publicação em produção e execução das migrations 0008 a 0011 dependem de autorização expressa, isolada e formal do responsável pelo projeto, seguindo o runbook de deploy.
+

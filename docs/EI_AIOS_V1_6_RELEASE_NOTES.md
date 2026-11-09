@@ -73,3 +73,4 @@ A plataforma agora possui capacidade autônoma e determinística de:
 ## 5. INSTRUÇÕES DE IMPLANTAÇÃO
 
 A implantação desta versão deve seguir estritamente o [`docs/EI_AIOS_V1_6_DEPLOYMENT_RUNBOOK.md`](file:///c:/_dev/ei-aios/docs/EI_AIOS_V1_6_DEPLOYMENT_RUNBOOK.md), executando as migrations 0008 a 0011 em sequência atômica antes da atualização dos serviços no Docker Swarm.
+

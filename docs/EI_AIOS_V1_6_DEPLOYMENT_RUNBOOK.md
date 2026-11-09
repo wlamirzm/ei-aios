@@ -107,3 +107,4 @@ Abortar imediatamente a implantação e disparar o plano de rollback caso:
 1. O serviço `agent-core` ou `worker` entre em crash loop (`Restarting (1)`).
 2. O healthcheck HTTP falhe por mais de 3 tentativas consecutivas.
 3. Ocorram erros de chave estrangeira violada ou regressão em tarefas ativas.
+

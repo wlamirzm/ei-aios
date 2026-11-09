@@ -112,3 +112,4 @@ SELECT model_name, input_usd_per_million, output_usd_per_million FROM finops_mod
 SELECT table_name FROM information_schema.tables
 WHERE table_name IN ('client_contracts', 'revenue_invoices', 'revenue_receipts', 'success_fee_events', 'acquisition_expenses', 'operational_expenses');
 ```
+

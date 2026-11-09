@@ -91,3 +91,4 @@ Após executar a reversão:
 1. Verificar status dos serviços: `docker service ls` (todos com réplicas `1/1`).
 2. Testar health check: `curl http://localhost:4000/api/v1/health`.
 3. Confirmar que o worker da v1.5 está processando a fila normalmente.
+
