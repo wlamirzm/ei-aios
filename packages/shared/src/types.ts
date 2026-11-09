@@ -329,3 +329,98 @@ export interface FinopsReconciliationSummary {
   total_cost_brl: number;
 }
 
+// ==============================================================================
+// SPRINT 6 S6-03: REAL REVENUE PIPELINE & CONTRACT BILLING SYNC
+// ==============================================================================
+
+export type ContractStatus = 'active' | 'expired' | 'suspended' | 'draft' | 'cancelled';
+export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'partially_paid' | 'overdue' | 'cancelled';
+export type SuccessFeeStatus = 'pending_approval' | 'approved' | 'invoiced' | 'received' | 'not_eligible' | 'rejected';
+export type AdjustmentIndex = 'IPCA' | 'IGP-M' | 'INPC' | 'FIXED';
+
+export interface ClientContractModel {
+  id: string;
+  client_id: string;
+  contract_number: string;
+  start_date: string; // ISO date YYYY-MM-DD
+  end_date: string | null; // ISO date YYYY-MM-DD
+  monthly_recurring_value_brl: number | null;
+  has_success_fee: boolean;
+  success_fee_percent: number | null;
+  success_fee_clause: string | null;
+  adjustment_index: AdjustmentIndex;
+  adjustment_periodicity_months: number;
+  last_adjustment_date?: string | null;
+  status: ContractStatus;
+  created_at: string;
+  updated_at?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface RevenueInvoiceModel {
+  id: string;
+  contract_id: string;
+  client_id: string;
+  invoice_number: string;
+  competence: string; // YYYY-MM
+  issue_date: string;
+  due_date: string;
+  recurring_amount_brl: number;
+  success_fee_amount_brl: number;
+  total_amount_brl: number;
+  status: InvoiceStatus;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface RevenueReceiptModel {
+  id: string;
+  invoice_id: string;
+  client_id: string;
+  receipt_date: string;
+  amount_received_brl: number;
+  transaction_reference: string;
+  is_partial: boolean;
+  balance_remaining_brl: number;
+  created_at: string;
+}
+
+export interface SuccessFeeEventModel {
+  id: string;
+  contract_id: string;
+  client_id: string;
+  mv_report_id: string;
+  competence: string; // YYYY-MM
+  verified_savings_brl: number;
+  clause_applied: string;
+  fee_percent: number;
+  eligible_amount_brl: number;
+  approval_status: 'pending_approval' | 'approved' | 'rejected';
+  approved_by?: string | null;
+  approved_at?: string | null;
+  invoice_id?: string | null;
+  status: SuccessFeeStatus;
+  created_at: string;
+}
+
+export interface RealMarginReport {
+  client_id: string;
+  competence: string;
+  contracted_mrr_brl: number | null;
+  invoiced_mrr_brl: number;
+  invoiced_success_fee_brl: number;
+  total_invoiced_brl: number;
+  received_mrr_brl: number;
+  received_success_fee_brl: number;
+  total_received_brl: number;
+  direct_support_cost_brl: number;
+  ai_cost_usd: number;
+  ai_cost_brl: number;
+  total_direct_costs_brl: number;
+  margin_on_invoiced_brl: number;
+  margin_on_invoiced_percent: number;
+  margin_on_received_brl: number;
+  margin_on_received_percent: number;
+  reliability: 'measured' | 'estimated' | 'incomplete';
+}
+
