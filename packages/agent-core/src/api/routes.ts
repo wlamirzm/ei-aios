@@ -18,7 +18,11 @@ import { autonomousWorker } from '../engine/worker.js';
 import { workflowRunner } from '../engine/workflow-runner.js';
 import { parseEnergyBill } from '../tools/bill-parser.js';
 import { runEnergyAudit } from '../tools/energy-calculator.js';
-import { runFullCfoSnapshot, ClientFinancialContractInput } from '../tools/finops-calculator.js';
+import {
+  runFullCfoSnapshot,
+  ClientFinancialContractInput,
+  ObservabilityDashboardService
+} from '../tools/finops-calculator.js';
 import {
   fetchImapEmailsFromHostgator,
   processAndSaveEmailMessage,
@@ -413,16 +417,18 @@ apiRouter.get('/api/v1/metrics/finops', async (_req: Request, res: Response, nex
         .filter((b: any) => b.validation_status !== 'verified_mv')
         .reduce((acc: number, b: any) => acc + Number(b.potential_savings_brl || 0), 0);
 
+      const hasMrr = c.mrr_brl !== null && c.mrr_brl !== undefined;
       return {
         clientId: c.id,
         companyName: c.company_name || 'Cliente',
         isActive: c.stage !== 'churned',
-        mrrBrl: Number(c.mrr_brl ?? 1490),
-        setupFeeBrl: Number(c.setup_fee_brl ?? 2500),
-        successFeePercent: Number(c.success_fee_percent ?? 20),
+        mrrBrl: hasMrr ? Number(c.mrr_brl) : 0,
+        isMrrMissing: !hasMrr,
+        setupFeeBrl: Number(c.setup_fee_brl || 0),
+        successFeePercent: Number(c.success_fee_percent || 0),
         verifiedMonthlySavingsBrl: verifiedSavings,
         unverifiedEstimatedSavingsBrl: unverifiedSavings,
-        directMonthlySupportCostBrl: Number(c.direct_monthly_cost_brl ?? 180),
+        directMonthlySupportCostBrl: Number(c.direct_monthly_cost_brl || 0),
         consumerUnitsCount: Math.max(1, clientUcs.length)
       };
     });
@@ -1309,6 +1315,63 @@ apiRouter.get('/api/v1/decisions', async (req: Request, res: Response, next: Nex
         limit,
         offset
       }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// S6-05: OBSERVABILITY FINOPS DASHBOARD (AG-011 CFO DIGITAL)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/finops/dashboard/overview', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const competence = req.query.competence ? String(req.query.competence) : undefined;
+    const tenantId = req.query.tenant_id ? String(req.query.tenant_id) : 'default_tenant';
+
+    const { data: runsRows } = await supabase.from('agent_runs').select('*').limit(300);
+
+    const dashboardService = new ObservabilityDashboardService();
+    if (runsRows && runsRows.length > 0) {
+      dashboardService.getLedgerEngine().reconcileRuns(runsRows as any[]);
+    }
+
+    const overview = dashboardService.getExecutiveOverview({ competence, tenantId });
+    res.json({
+      success: true,
+      data: overview
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/api/v1/finops/dashboard/cost-usage', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const clientId = req.query.client_id ? String(req.query.client_id) : undefined;
+    const agentId = req.query.agent_id ? String(req.query.agent_id) : undefined;
+    const modelName = req.query.model ? String(req.query.model) : undefined;
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
+    const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+
+    const { data: runsRows } = await supabase.from('agent_runs').select('*').limit(300);
+
+    const dashboardService = new ObservabilityDashboardService();
+    if (runsRows && runsRows.length > 0) {
+      dashboardService.getLedgerEngine().reconcileRuns(runsRows as any[]);
+    }
+
+    const details = dashboardService.getCostAndUsageDetails({
+      clientId,
+      agentId,
+      modelName,
+      limit,
+      offset
+    });
+
+    res.json({
+      success: true,
+      data: details
     });
   } catch (err) {
     next(err);

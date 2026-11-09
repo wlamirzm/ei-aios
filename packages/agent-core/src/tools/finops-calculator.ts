@@ -7,6 +7,7 @@ import { CFODeliverableSchema } from '@ei-aios/shared';
 export * from './finops-ledger-engine.js';
 export * from './revenue-pipeline-engine.js';
 export * from './unit-economics-engine.js';
+export * from './observability-dashboard-service.js';
 
 export type CFOMetricStatus = 'verified' | 'estimated' | 'incomplete' | 'not_available';
 
