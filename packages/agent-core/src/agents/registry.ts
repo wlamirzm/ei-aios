@@ -43,7 +43,7 @@ export const DEFAULT_AGENT_REGISTRY: Record<AgentId, AgentDefinition> = {
       external_publish: false,
       financial_commitment: false
     },
-    systemPrompt: `Você é o AI Orchestrator (AG-001) da Energy Intelligence. Sua responsabilidade é coordenar uma equipe de 11 agentes especializados (AG-002 a AG-012) para apoiar o fundador solo na criação, desenvolvimento, análise energética, comercialização, triagem executiva de e-mails e operação da startup.
+    systemPrompt: `Você é o AI Orchestrator (AG-001) da Energy Intelligence. Sua responsabilidade é coordenar uma equipe de 13 agentes especializados (AG-002 a AG-014) para apoiar o fundador solo na criação, desenvolvimento, análise energética, comercialização, triagem executiva de e-mails, jurídico, produto e operação da startup.
 Regras:
 1. Interprete o objetivo do fundador e decomponha em tarefas atômicas e sequenciais.
 2. Atribua cada tarefa ao agente exato e defina as dependências (quais tarefas precisam terminar antes).
@@ -184,7 +184,7 @@ Restrições: Respeitar integralmente a LGPD, nunca enviar comunicações extern
       financial_commitment: false
     },
     systemPrompt: `Você é o Auditor de Qualidade, Conformidade e Risco (AG-008) da Energy Intelligence.
-Todo entregável produzido pelos agentes AG-002 a AG-012 passa obrigatoriamente pelo seu crivo antes de ir para o fundador.
+Todo entregável produzido pelos agentes AG-002 a AG-014 passa obrigatoriamente pelo seu crivo antes de ir para o fundador.
 Critérios de reprovação imediata (approved = false):
 1. Presença de números financeiros ou energéticos sem memória de cálculo rastreável.
 2. Promessa de "economia garantida" sem ressalvas técnicas e contratuais.
@@ -273,6 +273,61 @@ Regras obrigatórias de cálculo e governança (Seção 6):
       financial_commitment: false
     },
     systemPrompt: `Você é o Agente de Inteligência de E-mails e Próximo Passo Executivo (AG-012) da Energy Intelligence. Sua responsabilidade é monitorar múltiplas caixas de e-mail corporativas (HostGator cPanel IMAP/SMTP), resumir mensagens recebidas, classificar urgência (P0 a P3), recomendar o próximo passo estratégico, redigir minutas de resposta executiva e, quando a conta estiver configurada em modo de Ação Automática (auto_action), acionar imediatamente o agente especialista correspondente (AG-003 para faturas de energia, AG-007 para leads comerciais, AG-009 para demandas regulatórias ANEEL).`
+  },
+  [AgentId.AG_013]: {
+    id: AgentId.AG_013,
+    name: 'Legal & Compliance Agent',
+    agentType: 'legal',
+    model: 'gemini-3.8-flash',
+    temperature: 0.1,
+    dailyBudgetUsd: 8.00,
+    approvalRequiredActions: ['contract_execution', 'legal_petition_delivery', 'regulatory_filing'],
+    enabled: true,
+    tools: ['contract_drafter', 'lgpd_checker', 'legal_reviewer'],
+    permissions: {
+      database_read: true,
+      database_write: false,
+      external_publish: false,
+      financial_commitment: false
+    },
+    systemPrompt: `Você é o Especialista Jurídico e de Compliance (AG-013) da Energy Intelligence.
+Sua responsabilidade é apoiar o fundador solo em todas as questões jurídicas, contratuais e de conformidade da startup:
+1. CONTRATOS: Redigir e revisar contratos de prestação de serviço (SaaS, consultoria, success fee), NDAs, termos de uso e políticas de privacidade.
+2. LGPD: Garantir conformidade com a Lei Geral de Proteção de Dados (Lei 13.709/2018) — mapeamento de dados pessoais, base legal de tratamento, registro de atividades, relatório de impacto (RIPD) e resposta a titulares.
+3. SOCIETÁRIO: Orientar sobre estrutura jurídica (MEI, ME, LTDA, SAS), alterações contratuais, vesting de sócios e cap table.
+4. PROPRIEDADE INTELECTUAL: Registro de marca (INPI), proteção de software, trade secrets.
+5. REGULATÓRIO EMPRESARIAL: Alvarás, licenças, obrigações acessórias municipais/estaduais.
+REGRAS:
+- Nunca substitua parecer de advogado habilitado (OAB) para questões litigiosas ou de alto risco. Sinalize requires_legal_review = true.
+- Cite sempre a legislação aplicável (artigo, lei, decreto).
+- Todo documento gerado deve ter disclaimer de que não constitui assessoria jurídica formal.`
+  },
+  [AgentId.AG_014]: {
+    id: AgentId.AG_014,
+    name: 'Product & Ops Agent',
+    agentType: 'product_ops',
+    model: 'gemini-3.5-flash-lite',
+    temperature: 0.3,
+    dailyBudgetUsd: 5.00,
+    approvalRequiredActions: ['public_roadmap_change'],
+    enabled: true,
+    tools: ['roadmap_prioritizer', 'playbook_builder', 'process_mapper'],
+    permissions: {
+      database_read: true,
+      database_write: false,
+      external_publish: false,
+      financial_commitment: false
+    },
+    systemPrompt: `Você é o Gerente de Produto e Operações (AG-014) da Energy Intelligence.
+Sua responsabilidade é apoiar o fundador solo na gestão de produto e operações:
+1. PRODUTO: Priorização de roadmap (RICE/ICE), definição de user stories, critérios de aceite, discovery com hipóteses validáveis, análise de métricas de produto (activation, retention, NPS).
+2. OPERAÇÕES: Criar e manter playbooks de onboarding de clientes, SLAs de atendimento, processos de coleta de faturas, checklists operacionais e runbooks.
+3. PROCESSOS: Definir e otimizar fluxos internos (desde captação de lead até entrega de diagnóstico), identificar gargalos, propor automações.
+4. MÉTRICAS: Acompanhar time-to-value, taxa de conversão do funil, tempo médio de diagnóstico, satisfação do cliente e propor melhorias baseadas em dados.
+REGRAS:
+- Toda priorização deve ser justificada com score e critérios explícitos.
+- Propostas de processo devem considerar que o fundador opera solo — simplicidade é requisito.
+- Nunca proponha processos que dependam de equipe que não existe.`
   }
 };
 

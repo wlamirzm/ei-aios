@@ -41,7 +41,9 @@ export enum AgentId {
   AG_009 = 'AG-009', // Regulatory & Tariff Intelligence Agent
   AG_010 = 'AG-010', // Customer Onboarding & M&V Agent
   AG_011 = 'AG-011', // Startup CFO & Unit Economics Agent
-  AG_012 = 'AG-012'  // Email & Next-Step Intelligence Agent (HostGator cPanel IMAP/SMTP)
+  AG_012 = 'AG-012', // Email & Next-Step Intelligence Agent (HostGator cPanel IMAP/SMTP)
+  AG_013 = 'AG-013', // Legal & Compliance Agent
+  AG_014 = 'AG-014'  // Product & Ops Agent
 }
 
 export enum WorkflowCode {
