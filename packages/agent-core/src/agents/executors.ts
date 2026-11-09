@@ -2,7 +2,7 @@
 // AGENT EXECUTORS: SPECIALIZED INVOCATIONS PER AGENT
 // ==============================================================================
 
-import { AgentId, TaskModel } from '@ei-aios/shared';
+import { AgentId, TaskModel, ExecutionContext } from '@ei-aios/shared';
 import { geminiService } from '../config/gemini.js';
 import { supabase } from '../config/supabase.js';
 import { getAgentDefinition } from './registry.js';
@@ -19,7 +19,7 @@ export interface AgentExecutionResult {
   costUsd: number;
 }
 
-export async function executeAgentTask(task: TaskModel): Promise<AgentExecutionResult> {
+export async function executeAgentTask(task: TaskModel, context?: ExecutionContext): Promise<AgentExecutionResult> {
   const agentDef = await getAgentDefinition(task.assigned_agent_id);
   const input = task.input_payload || {};
 
@@ -165,10 +165,21 @@ Retorne exclusivamente um objeto JSON válido contendo obrigatoriamente:
 - "limitations": lista de limitações e ressalvas regulatórias
 - além dos campos estruturados específicos da sua especialidade.`;
 
-  // 3. Invocação ao Gemini
+  // 3. Invocação ao Gemini com propagação integral de contexto operacional e financeiro (S6-01)
+  const effectiveClientId = task.client_id || context?.clientId || null;
+  const effectiveConsumerUnitId =
+    task.consumer_unit_id || task.input_payload?.consumer_unit_id || context?.consumerUnitId || null;
+  const effectiveExecutionId = context?.executionId || task.input_payload?.lease_token || null;
+  const isInternal = !effectiveClientId;
+
   const response = await geminiService.generateStructuredContent({
     taskId: task.id,
     agentId: task.assigned_agent_id,
+    clientId: effectiveClientId,
+    consumerUnitId: effectiveConsumerUnitId,
+    executionId: effectiveExecutionId,
+    isInternal,
+    origin: context?.origin || 'worker',
     model: agentDef.model,
     systemInstruction: agentDef.systemPrompt,
     prompt: finalPrompt,

@@ -18,7 +18,13 @@ import { autonomousWorker } from '../engine/worker.js';
 import { workflowRunner } from '../engine/workflow-runner.js';
 import { parseEnergyBill } from '../tools/bill-parser.js';
 import { runEnergyAudit } from '../tools/energy-calculator.js';
-import { runFullCfoSnapshot, ClientFinancialContractInput } from '../tools/finops-calculator.js';
+import {
+  runFullCfoSnapshot,
+  ClientFinancialContractInput,
+  ObservabilityDashboardService,
+  RevenuePipelineEngine,
+  UnitEconomicsEngine
+} from '../tools/finops-calculator.js';
 import {
   fetchImapEmailsFromHostgator,
   processAndSaveEmailMessage,
@@ -115,6 +121,7 @@ apiRouter.post('/api/v1/objectives', async (req: Request, res: Response, next: N
       objective: validated.objective,
       priority: validated.priority,
       clientId: validated.client_id,
+      consumerUnitId: validated.consumer_unit_id,
       workflowCode: validated.workflow_code,
       createdBy: 'FOUNDER'
     });
@@ -160,10 +167,13 @@ apiRouter.post(
         return;
       }
 
-      // 2. Extração Multimodal via Gemini / OCR
+      // 2. Extração Multimodal via Gemini / OCR com propagação de contexto do cliente (S6-01)
       const taskIdForOcr = `ocr-${Date.now()}`;
       const extractedData = await parseEnergyBill({
         taskId: taskIdForOcr,
+        clientId: uc.client_id || null,
+        consumerUnitId: uc.id,
+        executionId: `ocr_${Date.now()}`,
         fileBuffer: file?.buffer,
         mimeType: file?.mimetype || 'application/pdf',
         consumerUnitHint: uc.uc_code
@@ -409,16 +419,18 @@ apiRouter.get('/api/v1/metrics/finops', async (_req: Request, res: Response, nex
         .filter((b: any) => b.validation_status !== 'verified_mv')
         .reduce((acc: number, b: any) => acc + Number(b.potential_savings_brl || 0), 0);
 
+      const hasMrr = c.mrr_brl !== null && c.mrr_brl !== undefined;
       return {
         clientId: c.id,
         companyName: c.company_name || 'Cliente',
         isActive: c.stage !== 'churned',
-        mrrBrl: Number(c.mrr_brl ?? 1490),
-        setupFeeBrl: Number(c.setup_fee_brl ?? 2500),
-        successFeePercent: Number(c.success_fee_percent ?? 20),
+        mrrBrl: hasMrr ? Number(c.mrr_brl) : 0,
+        isMrrMissing: !hasMrr,
+        setupFeeBrl: Number(c.setup_fee_brl || 0),
+        successFeePercent: Number(c.success_fee_percent || 0),
         verifiedMonthlySavingsBrl: verifiedSavings,
         unverifiedEstimatedSavingsBrl: unverifiedSavings,
-        directMonthlySupportCostBrl: Number(c.direct_monthly_cost_brl ?? 180),
+        directMonthlySupportCostBrl: Number(c.direct_monthly_cost_brl || 0),
         consumerUnitsCount: Math.max(1, clientUcs.length)
       };
     });
@@ -1311,5 +1323,218 @@ apiRouter.get('/api/v1/decisions', async (req: Request, res: Response, next: Nex
   }
 });
 
+// ------------------------------------------------------------------------------
+// S6-05: OBSERVABILITY FINOPS DASHBOARD (AG-011 CFO DIGITAL)
+// ------------------------------------------------------------------------------
 
+async function buildDashboardService(options?: { competence?: string; tenantId?: string }) {
+  let runsQuery = supabase.from('agent_runs').select('*');
+  if (options?.competence && /^\d{4}-\d{2}$/.test(options.competence)) {
+    const parts = options.competence.split('-').map(Number);
+    const y = parts[0]!;
+    const m = parts[1]!;
+    const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    runsQuery = runsQuery
+      .gte('created_at', `${options.competence}-01T00:00:00.000Z`)
+      .lte('created_at', `${options.competence}-${String(lastDay).padStart(2, '0')}T23:59:59.999Z`);
+  }
+  const { data: runsRows } = await runsQuery.limit(5000);
+
+  const [contractsRes, invoicesRes, receiptsRes, acqExpRes, opExpRes] = await Promise.all([
+    supabase.from('client_contracts').select('*'),
+    supabase.from('revenue_invoices').select('*'),
+    supabase.from('revenue_receipts').select('*'),
+    supabase.from('acquisition_expenses').select('*'),
+    supabase.from('operational_expenses').select('*'),
+  ]);
+
+  const revenueEngine = new RevenuePipelineEngine({
+    contracts: contractsRes.data || [],
+    invoices: invoicesRes.data || [],
+    receipts: receiptsRes.data || [],
+  });
+
+  const unitEconomicsEngine = new UnitEconomicsEngine({
+    acquisitionExpenses: acqExpRes.data || [],
+    operationalExpenses: opExpRes.data || [],
+  });
+
+  const dashboardService = new ObservabilityDashboardService({
+    revenueEngine,
+    unitEconomicsEngine,
+  });
+
+  if (runsRows && runsRows.length > 0) {
+    dashboardService.getLedgerEngine().reconcileRuns(runsRows as any[]);
+  }
+
+  return dashboardService;
+}
+
+apiRouter.get('/api/v1/finops/dashboard/overview', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const competence = req.query.competence ? String(req.query.competence) : undefined;
+    const tenantId = req.query.tenant_id ? String(req.query.tenant_id) : 'default_tenant';
+
+    const dashboardService = await buildDashboardService({ competence, tenantId });
+    const overview = dashboardService.getExecutiveOverview({ competence, tenantId });
+    res.json({
+      success: true,
+      data: overview
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/api/v1/finops/dashboard/cost-usage', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const competence = req.query.competence ? String(req.query.competence) : undefined;
+    const clientId = req.query.client_id ? String(req.query.client_id) : undefined;
+    const agentId = req.query.agent_id ? String(req.query.agent_id) : undefined;
+    const modelName = req.query.model ? String(req.query.model) : undefined;
+    const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit || '50'), 10) || 50));
+    const offset = Math.max(0, parseInt(String(req.query.offset || '0'), 10) || 0);
+
+    const dashboardService = await buildDashboardService({ competence });
+    const details = dashboardService.getCostAndUsageDetails({
+      clientId,
+      agentId,
+      modelName,
+      limit,
+      offset
+    });
+
+    res.json({
+      success: true,
+      data: details
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// CLIENT FLOW: Consumer Units, Report Generation & Public Report Access
+// ------------------------------------------------------------------------------
+
+apiRouter.get('/api/v1/consumer-units', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { data: units, error } = await supabase
+      .from('consumer_units')
+      .select('*, client:clients(id, company_name, cnpj, segment)')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      res.status(500).json({ error: 'Falha ao buscar unidades consumidoras' });
+      return;
+    }
+
+    res.json({ success: true, data: units || [] });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.post('/api/v1/reports/generate', requireFounderAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { bill_id } = req.body || {};
+    if (!bill_id) {
+      res.status(400).json({ error: 'bill_id é obrigatório' });
+      return;
+    }
+
+    const { data: bill, error: billErr } = await supabase
+      .from('energy_bills')
+      .select('id')
+      .eq('id', bill_id)
+      .single();
+
+    if (billErr || !bill) {
+      res.status(404).json({ error: 'Fatura não encontrada' });
+      return;
+    }
+
+    const { data: report, error: reportErr } = await supabase
+      .from('diagnostic_reports')
+      .insert({ energy_bill_id: bill_id })
+      .select('token, expires_at, created_at')
+      .single();
+
+    if (reportErr) {
+      res.status(500).json({ error: 'Falha ao gerar relatório', details: reportErr.message });
+      return;
+    }
+
+    res.json({
+      success: true,
+      token: report.token,
+      expires_at: report.expires_at,
+      created_at: report.created_at
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+apiRouter.get('/api/v1/reports/:token', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { token } = req.params;
+
+    const { data: report, error: reportErr } = await supabase
+      .from('diagnostic_reports')
+      .select('*, bill:energy_bills(*, consumer_unit:consumer_units(*, client:clients(company_name, cnpj, segment)))')
+      .eq('token', token)
+      .single();
+
+    if (reportErr || !report) {
+      res.status(404).json({ error: 'Relatório não encontrado' });
+      return;
+    }
+
+    if (new Date(report.expires_at) < new Date()) {
+      res.status(410).json({ error: 'Este relatório expirou' });
+      return;
+    }
+
+    const bill = report.bill;
+    res.json({
+      success: true,
+      data: {
+        report_id: report.id,
+        created_at: report.created_at,
+        expires_at: report.expires_at,
+        bill: {
+          id: bill.id,
+          billing_period: bill.billing_period,
+          due_date: bill.due_date,
+          total_amount_brl: bill.total_amount_brl,
+          consumption_peak_kwh: bill.consumption_peak_kwh,
+          consumption_offpeak_kwh: bill.consumption_offpeak_kwh,
+          measured_demand_peak_kw: bill.measured_demand_peak_kw,
+          measured_demand_offpeak_kw: bill.measured_demand_offpeak_kw,
+          potential_savings_brl: bill.potential_savings_brl,
+          deterministic_audit_json: bill.deterministic_audit_json,
+          taxes_breakdown: bill.taxes_breakdown
+        },
+        consumer_unit: bill.consumer_unit ? {
+          uc_code: bill.consumer_unit.uc_code,
+          unit_name: bill.consumer_unit.unit_name,
+          distributor: bill.consumer_unit.distributor,
+          tariff_group: bill.consumer_unit.tariff_group,
+          tariff_modality: bill.consumer_unit.tariff_modality,
+          contracted_demand_peak_kw: bill.consumer_unit.contracted_demand_peak_kw,
+          contracted_demand_offpeak_kw: bill.consumer_unit.contracted_demand_offpeak_kw
+        } : null,
+        client: bill.consumer_unit?.client ? {
+          company_name: bill.consumer_unit.client.company_name,
+          cnpj: bill.consumer_unit.client.cnpj,
+          segment: bill.consumer_unit.client.segment
+        } : null
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 

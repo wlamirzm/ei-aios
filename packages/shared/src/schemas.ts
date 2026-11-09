@@ -415,6 +415,7 @@ export const CreateObjectiveRequestSchema = z.object({
   objective: z.string().min(5),
   priority: PriorityLevelSchema.default(PriorityLevel.P1),
   client_id: z.string().uuid().optional(),
+  consumer_unit_id: z.string().uuid().optional(),
   workflow_code: WorkflowCodeSchema.optional()
 });
 

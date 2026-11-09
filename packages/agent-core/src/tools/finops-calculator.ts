@@ -4,6 +4,10 @@
 // ==============================================================================
 
 import { CFODeliverableSchema } from '@ei-aios/shared';
+export * from './finops-ledger-engine.js';
+export * from './revenue-pipeline-engine.js';
+export * from './unit-economics-engine.js';
+export * from './observability-dashboard-service.js';
 
 export type CFOMetricStatus = 'verified' | 'estimated' | 'incomplete' | 'not_available';
 
@@ -43,6 +47,9 @@ export interface AgentRunRecordInput {
   agent_id: string;
   task_id?: string | null;
   client_id?: string | null;
+  consumer_unit_id?: string | null;
+  execution_id?: string | null;
+  is_internal?: boolean;
   model_name: string;
   input_tokens?: number | null;
   output_tokens?: number | null;
@@ -50,6 +57,7 @@ export interface AgentRunRecordInput {
   execution_time_ms?: number | null;
   status: string;
   created_at?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface MrrArrResult {
@@ -106,6 +114,10 @@ export interface AgentRunsReconciliationResult {
   total_output_tokens: number;
   total_cost_usd: number;
   total_cost_brl: number;
+  client_attributed_runs_count: number;
+  client_attributed_cost_usd: number;
+  internal_platform_runs_count: number;
+  internal_platform_cost_usd: number;
   runs_without_cost_count: number;
   unlinked_runs_count: number;
   cost_by_agent_usd: Record<string, number>;
@@ -385,6 +397,10 @@ export function reconcileAgentRunsFinOps(
   let totalIn = 0;
   let totalOut = 0;
   let totalUsd = 0;
+  let clientAttributedCount = 0;
+  let clientAttributedUsd = 0;
+  let internalPlatformCount = 0;
+  let internalPlatformUsd = 0;
   let runsWithoutCost = 0;
   let unlinkedRuns = 0;
   const costByAgent: Record<string, number> = {};
@@ -392,11 +408,19 @@ export function reconcileAgentRunsFinOps(
   for (const r of runs) {
     const inTok = Math.max(0, Number(r.input_tokens || 0));
     const outTok = Math.max(0, Number(r.output_tokens || 0));
-    const cost = Number(r.cost_estimate || 0);
+    const cost = Math.max(0, Number(r.cost_estimate || 0));
 
     totalIn += inTok;
     totalOut += outTok;
-    totalUsd += Math.max(0, cost);
+    totalUsd += cost;
+
+    if (r.client_id) {
+      clientAttributedCount++;
+      clientAttributedUsd += cost;
+    } else if (r.is_internal) {
+      internalPlatformCount++;
+      internalPlatformUsd += cost;
+    }
 
     if (r.cost_estimate === null || r.cost_estimate === undefined || Number(r.cost_estimate) <= 0) {
       runsWithoutCost++;
@@ -406,11 +430,13 @@ export function reconcileAgentRunsFinOps(
     }
 
     const ag = r.agent_id || 'UNKNOWN';
-    costByAgent[ag] = round4((costByAgent[ag] || 0) + Math.max(0, cost));
+    costByAgent[ag] = round4((costByAgent[ag] || 0) + cost);
   }
 
   totalUsd = round4(totalUsd);
   const totalBrl = round2(totalUsd * usdToBrlRate);
+  clientAttributedUsd = round4(clientAttributedUsd);
+  internalPlatformUsd = round4(internalPlatformUsd);
 
   return {
     total_runs_count: runs.length,
@@ -418,6 +444,10 @@ export function reconcileAgentRunsFinOps(
     total_output_tokens: totalOut,
     total_cost_usd: totalUsd,
     total_cost_brl: totalBrl,
+    client_attributed_runs_count: clientAttributedCount,
+    client_attributed_cost_usd: clientAttributedUsd,
+    internal_platform_runs_count: internalPlatformCount,
+    internal_platform_cost_usd: internalPlatformUsd,
     runs_without_cost_count: runsWithoutCost,
     unlinked_runs_count: unlinkedRuns,
     cost_by_agent_usd: costByAgent,

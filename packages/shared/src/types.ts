@@ -155,6 +155,7 @@ export interface TaskModel {
   workflow_code?: WorkflowCode | string | null;
   parent_task_id?: string | null;
   client_id?: string | null;
+  consumer_unit_id?: string | null;
   created_by: string;
   assigned_agent_id: AgentId | string;
   objective: string;
@@ -178,7 +179,11 @@ export interface TaskModel {
 
 export interface AgentRunModel {
   id: string;
-  task_id: string;
+  task_id?: string | null;
+  client_id?: string | null;
+  consumer_unit_id?: string | null;
+  execution_id?: string | null;
+  is_internal?: boolean;
   agent_id: string;
   model_provider: string;
   model_name: string;
@@ -188,7 +193,20 @@ export interface AgentRunModel {
   cost_estimate: number;
   status: 'success' | 'error' | 'qa_rejected';
   error_message?: string | null;
+  metadata?: Record<string, any>;
   created_at: string;
+}
+
+export interface ExecutionContext {
+  taskId?: string | null;
+  runId?: string;
+  agentId: AgentId | string;
+  clientId?: string | null;
+  consumerUnitId?: string | null;
+  executionId?: string | null;
+  isInternal?: boolean;
+  origin?: 'orchestrator' | 'worker' | 'qa_gate' | 'bill_parser' | 'email_intelligence' | 'chat' | 'system';
+  metadata?: Record<string, any>;
 }
 
 export interface ApprovalModel {
@@ -231,5 +249,296 @@ export interface KnowledgeSourceModel {
   version: string;
   metadata: Record<string, any>;
   created_at: string;
+}
+
+// ==============================================================================
+// SPRINT 6 S6-02: FINOPS COST & USAGE LEDGER TYPES
+// ==============================================================================
+
+export type CostReliabilityTier = 'measured' | 'estimated' | 'reconciled' | 'incomplete' | 'unattributed';
+
+export type CostCategory = 'client_attributable' | 'platform_internal' | 'unattributed_legacy' | 'unattributed_orphan';
+
+export interface ModelPricingItem {
+  inputUsdPerMillion: number;
+  outputUsdPerMillion: number;
+  currency: 'USD';
+  effectiveFrom?: string;
+  effectiveUntil?: string;
+}
+
+export interface ModelPricingMatrix {
+  versionId: string;
+  name: string;
+  effectiveDate: string;
+  models: Record<string, ModelPricingItem>;
+  notes?: string;
+}
+
+export interface FinopsLedgerEntry {
+  id: string;
+  run_id: string;
+  task_id?: string | null;
+  agent_id: string;
+  client_id?: string | null;
+  consumer_unit_id?: string | null;
+  execution_id?: string | null;
+  model_name: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  pricing_version: string;
+  cost_usd: number | null;
+  cost_brl: number | null;
+  exchange_rate: number;
+  reliability_tier: CostReliabilityTier;
+  category: CostCategory;
+  origin?: string | null;
+  run_created_at?: string | null;
+  reconciled_at: string;
+  is_reprocessed: boolean;
+  divergence_notes?: string | null;
+  metadata?: Record<string, any>;
+}
+
+export interface FinopsReconciliationSummary {
+  batch_id: string;
+  reconciled_at: string;
+  pricing_version: string;
+  exchange_rate: number;
+  total_processed: number;
+  new_entries_count: number;
+  reprocessed_entries_count: number;
+  skipped_duplicate_count: number;
+  by_category: {
+    client_attributable: { count: number; cost_usd: number; cost_brl: number };
+    platform_internal: { count: number; cost_usd: number; cost_brl: number };
+    unattributed_legacy: { count: number; cost_usd: number; cost_brl: number };
+    unattributed_orphan: { count: number; cost_usd: number; cost_brl: number };
+  };
+  by_reliability_tier: {
+    measured: number;
+    estimated: number;
+    reconciled: number;
+    incomplete: number;
+    unattributed: number;
+  };
+  by_client: Record<string, { count: number; cost_usd: number; cost_brl: number }>;
+  by_agent: Record<string, { count: number; cost_usd: number; cost_brl: number }>;
+  total_tokens: { input: number; output: number; combined: number };
+  total_cost_usd: number;
+  total_cost_brl: number;
+}
+
+// ==============================================================================
+// SPRINT 6 S6-03: REAL REVENUE PIPELINE & CONTRACT BILLING SYNC
+// ==============================================================================
+
+export type ContractStatus = 'active' | 'expired' | 'suspended' | 'draft' | 'cancelled';
+export type InvoiceStatus = 'draft' | 'issued' | 'paid' | 'partially_paid' | 'overdue' | 'cancelled';
+export type SuccessFeeStatus = 'pending_approval' | 'approved' | 'invoiced' | 'received' | 'not_eligible' | 'rejected';
+export type AdjustmentIndex = 'IPCA' | 'IGP-M' | 'INPC' | 'FIXED';
+
+export interface ClientContractModel {
+  id: string;
+  client_id: string;
+  contract_number: string;
+  start_date: string; // ISO date YYYY-MM-DD
+  end_date: string | null; // ISO date YYYY-MM-DD
+  monthly_recurring_value_brl: number | null;
+  has_success_fee: boolean;
+  success_fee_percent: number | null;
+  success_fee_clause: string | null;
+  adjustment_index: AdjustmentIndex;
+  adjustment_periodicity_months: number;
+  last_adjustment_date?: string | null;
+  status: ContractStatus;
+  created_at: string;
+  updated_at?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface RevenueInvoiceModel {
+  id: string;
+  contract_id: string;
+  client_id: string;
+  invoice_number: string;
+  competence: string; // YYYY-MM
+  issue_date: string;
+  due_date: string;
+  recurring_amount_brl: number;
+  success_fee_amount_brl: number;
+  total_amount_brl: number;
+  status: InvoiceStatus;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface RevenueReceiptModel {
+  id: string;
+  invoice_id: string;
+  client_id: string;
+  receipt_date: string;
+  amount_received_brl: number;
+  transaction_reference: string;
+  is_partial: boolean;
+  balance_remaining_brl: number;
+  created_at: string;
+}
+
+export interface SuccessFeeEventModel {
+  id: string;
+  contract_id: string;
+  client_id: string;
+  mv_report_id: string;
+  competence: string; // YYYY-MM
+  verified_savings_brl: number;
+  clause_applied: string;
+  fee_percent: number;
+  eligible_amount_brl: number;
+  approval_status: 'pending_approval' | 'approved' | 'rejected';
+  approved_by?: string | null;
+  approved_at?: string | null;
+  invoice_id?: string | null;
+  status: SuccessFeeStatus;
+  created_at: string;
+}
+
+export interface RealMarginReport {
+  client_id: string;
+  competence: string;
+  contracted_mrr_brl: number | null;
+  invoiced_mrr_brl: number;
+  invoiced_success_fee_brl: number;
+  total_invoiced_brl: number;
+  received_mrr_brl: number;
+  received_success_fee_brl: number;
+  total_received_brl: number;
+  direct_support_cost_brl: number;
+  ai_cost_usd: number;
+  ai_cost_brl: number;
+  total_direct_costs_brl: number;
+  margin_on_invoiced_brl: number;
+  margin_on_invoiced_percent: number;
+  margin_on_received_brl: number;
+  margin_on_received_percent: number;
+  reliability: 'measured' | 'estimated' | 'incomplete';
+}
+
+// ==============================================================================
+// SPRINT 6 S6-04: CAC, LTV & PAYBACK DATA FOUNDATION (UNIT ECONOMICS)
+// ==============================================================================
+
+export type AcquisitionExpenseCategory =
+  | 'SALES'
+  | 'MARKETING'
+  | 'ADVERTISING'
+  | 'SALES_COMMISSIONS'
+  | 'LEAD_GENERATION'
+  | 'EVENTS'
+  | 'CUSTOMER_ACQUISITION_TOOLS'
+  | 'OTHER_ACQUISITION';
+
+export type OperationalExpenseCategory =
+  | 'ONBOARDING'
+  | 'IMPLEMENTATION'
+  | 'CUSTOMER_SUPPORT'
+  | 'OPERATIONAL_SERVICE'
+  | 'THIRD_PARTY_SERVICE'
+  | 'CUSTOMER_SPECIFIC_INFRASTRUCTURE'
+  | 'OTHER_COGS';
+
+export type ExpenseValidationStatus = 'validated' | 'pending' | 'rejected';
+
+export interface ExpenseAuditLogEntry {
+  previous_amount_brl: number;
+  new_amount_brl: number;
+  changed_by: string;
+  reason: string;
+  timestamp: string;
+}
+
+export interface AcquisitionExpenseModel {
+  id: string;
+  tenant_id: string;
+  client_id?: string | null;
+  campaign_id?: string | null;
+  category: AcquisitionExpenseCategory;
+  description: string;
+  amount_brl: number;
+  currency: 'BRL';
+  competence: string; // YYYY-MM
+  payment_date: string; // YYYY-MM-DD
+  document_reference?: string | null;
+  registered_by: string;
+  validation_status: ExpenseValidationStatus;
+  is_shared: boolean;
+  allocation_rule?: string | null;
+  created_at: string;
+  updated_at?: string;
+  history?: ExpenseAuditLogEntry[];
+}
+
+export interface OperationalExpenseModel {
+  id: string;
+  tenant_id: string;
+  client_id?: string | null;
+  consumer_unit_id?: string | null;
+  contract_id?: string | null;
+  category: OperationalExpenseCategory;
+  description: string;
+  amount_brl: number;
+  currency: 'BRL';
+  competence: string; // YYYY-MM
+  payment_date: string; // YYYY-MM-DD
+  document_reference?: string | null;
+  registered_by: string;
+  validation_status: ExpenseValidationStatus;
+  is_shared: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface CustomerAcquisitionEvent {
+  id: string;
+  client_id: string;
+  tenant_id: string;
+  acquisition_date: string; // YYYY-MM-DD
+  contract_id?: string | null;
+  channel?: string | null;
+  initial_mrr_brl?: number | null;
+  created_at: string;
+}
+
+export interface RealCacResult {
+  window_days: number;
+  window_start: string;
+  window_end: string;
+  total_eligible_spend_brl: number;
+  new_clients_acquired_count: number;
+  cac_brl: number | null;
+  status: 'measured' | 'estimated' | 'incomplete' | 'unattributed' | 'reconciled';
+  limitation_notes: string[];
+  included_expense_ids: string[];
+  included_client_ids: string[];
+}
+
+export interface RealLtvResult {
+  client_id?: string | null;
+  monthly_contribution_margin_brl: number | null;
+  observed_churn_rate_monthly?: number | null;
+  estimated_lifespan_months: number | null;
+  ltv_brl: number | null;
+  status: 'measured' | 'estimated' | 'incomplete';
+  methodology: string;
+  limitation_notes: string[];
+}
+
+export interface RealPaybackResult {
+  client_id?: string | null;
+  cac_brl: number | null;
+  monthly_contribution_margin_brl: number | null;
+  payback_months: number | null;
+  status: 'measured' | 'estimated' | 'incomplete';
+  limitation_notes: string[];
 }
 

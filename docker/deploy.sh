@@ -56,7 +56,12 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0005_sprint3_ag012_policies_and_rfc.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0006_sprint4_decision_logs.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0007_sprint5_reliability_hardening.sql
-    
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0008_sprint6_context_propagation.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0009_sprint6_finops_ledger.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0010_sprint6_revenue_pipeline.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0011_sprint6_unit_economics.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0012_diagnostic_reports.sql
+
     # Garante permissões e compatibilidade de telemetria sem conceder escrita para anon
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "
       ALTER TABLE agent_runs ALTER COLUMN task_id DROP NOT NULL;

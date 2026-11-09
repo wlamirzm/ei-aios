@@ -7,6 +7,9 @@ import { geminiService } from '../config/gemini.js';
 
 export interface ParseBillOptions {
   taskId: string;
+  clientId?: string | null;
+  consumerUnitId?: string | null;
+  executionId?: string | null;
   fileBuffer?: Buffer;
   base64Data?: string;
   mimeType?: string;
@@ -45,6 +48,11 @@ Retorne estritamente o JSON válido conforme a estrutura.`;
     const result = await geminiService.generateStructuredContent<EnergyBillExtraction>({
       taskId: options.taskId,
       agentId: 'AG-004',
+      clientId: options.clientId || null,
+      consumerUnitId: options.consumerUnitId || null,
+      executionId: options.executionId || `ocr_${Date.now()}`,
+      isInternal: !options.clientId,
+      origin: 'bill_parser',
       model: 'gemini-2.5-flash',
       prompt,
       files: files.length > 0 ? files : undefined

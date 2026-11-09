@@ -2,7 +2,7 @@
 // QA GATE: AG-008 AUDIT & QUALITY CONTROL GATEKEEPER
 // ==============================================================================
 
-import { QAReview, QAReviewSchema, TaskModel } from '@ei-aios/shared';
+import { QAReview, QAReviewSchema, TaskModel, ExecutionContext } from '@ei-aios/shared';
 import { geminiService } from '../config/gemini.js';
 import { getAgentDefinition } from '../agents/registry.js';
 
@@ -10,7 +10,11 @@ export class QAGate {
   /**
    * Executa a auditoria obrigatória do AG-008 sobre o resultado de qualquer agente (AG-002 a AG-011).
    */
-  async auditTaskResult(task: TaskModel, agentOutput: Record<string, any>): Promise<QAReview> {
+  async auditTaskResult(
+    task: TaskModel,
+    agentOutput: Record<string, any>,
+    context?: ExecutionContext
+  ): Promise<QAReview> {
     const qaAgentDef = await getAgentDefinition('AG-008');
 
     // Checagem determinística rápida de strings proibidas ("economia garantida"), ignorando ressalvas negativas explícitas
@@ -61,9 +65,19 @@ Retorne EXCLUSIVAMENTE um JSON válido com estas chaves exatas:
 }`;
 
     try {
+      const effectiveClientId = task.client_id || context?.clientId || null;
+      const effectiveConsumerUnitId =
+        task.consumer_unit_id || task.input_payload?.consumer_unit_id || context?.consumerUnitId || null;
+      const effectiveExecutionId = context?.executionId || task.input_payload?.lease_token || null;
+
       const result = await geminiService.generateStructuredContent<QAReview>({
         taskId: task.id,
         agentId: 'AG-008',
+        clientId: effectiveClientId,
+        consumerUnitId: effectiveConsumerUnitId,
+        executionId: effectiveExecutionId,
+        isInternal: !effectiveClientId,
+        origin: 'qa_gate',
         model: qaAgentDef.model,
         systemInstruction: qaAgentDef.systemPrompt,
         prompt,

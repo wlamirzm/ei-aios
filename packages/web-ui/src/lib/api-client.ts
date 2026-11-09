@@ -55,6 +55,39 @@ export async function fetchFinOpsMetrics() {
   return res.json();
 }
 
+export async function fetchDashboardOverview(competence?: string, tenantId?: string) {
+  const query = new URLSearchParams();
+  if (competence) query.set('competence', competence);
+  if (tenantId) query.set('tenant_id', tenantId);
+  const qStr = query.toString();
+  const url = `${getBaseUrl()}/api/v1/finops/dashboard/overview${qStr ? `?${qStr}` : ''}`;
+  const res = await fetch(url, { headers: getAuthHeaders(false), cache: 'no-store' });
+  if (!res.ok) throw new Error('Falha ao buscar visão executiva do dashboard');
+  return res.json();
+}
+
+export async function fetchCostUsageData(params?: {
+  agentId?: string;
+  modelName?: string;
+  clientId?: string;
+  category?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const query = new URLSearchParams();
+  if (params?.agentId) query.set('agent_id', params.agentId);
+  if (params?.modelName) query.set('model_name', params.modelName);
+  if (params?.clientId) query.set('client_id', params.clientId);
+  if (params?.category) query.set('category', params.category);
+  if (params?.limit) query.set('limit', String(params.limit));
+  if (params?.offset) query.set('offset', String(params.offset));
+  const qStr = query.toString();
+  const url = `${getBaseUrl()}/api/v1/finops/dashboard/cost-usage${qStr ? `?${qStr}` : ''}`;
+  const res = await fetch(url, { headers: getAuthHeaders(false), cache: 'no-store' });
+  if (!res.ok) throw new Error('Falha ao buscar detalhamento de custos e uso');
+  return res.json();
+}
+
 export async function fetchWorkerStatus() {
   const res = await fetch(`${getBaseUrl()}/api/v1/worker/status`, { cache: 'no-store' });
   if (!res.ok) return { isRunning: false, isProcessingCycle: false, pollIntervalMs: 5000 };
@@ -290,4 +323,38 @@ export async function executeEmailNextStep(messageId: string) {
   });
   if (!res.ok) throw new Error('Falha ao disparar próximo passo');
   return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// CLIENT FLOW: Consumer Units & Diagnostic Reports
+// ---------------------------------------------------------------------------
+
+export async function fetchConsumerUnits() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/consumer-units`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(false)
+  });
+  if (!res.ok) throw new Error('Falha ao listar unidades consumidoras');
+  const json = await res.json();
+  return json.data || json;
+}
+
+export async function generateReport(billId: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/reports/generate`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ bill_id: billId })
+  });
+  if (!res.ok) throw new Error('Falha ao gerar relatório');
+  return res.json();
+}
+
+export async function fetchPublicReport(token: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/reports/${token}`, {
+    cache: 'no-store'
+  });
+  if (res.status === 410) throw new Error('REPORT_EXPIRED');
+  if (!res.ok) throw new Error('Relatório não encontrado');
+  const json = await res.json();
+  return json.data || json;
 }
