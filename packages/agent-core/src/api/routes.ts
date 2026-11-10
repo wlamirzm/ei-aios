@@ -12,7 +12,7 @@ import {
   ApprovalStatus
 } from '@ei-aios/shared';
 import { supabase } from '../config/supabase.js';
-import { geminiService } from '../config/gemini.js';
+import { llmService } from '../config/llm.js';
 import { orchestrator } from '../engine/orchestrator.js';
 import { autonomousWorker } from '../engine/worker.js';
 import { workflowRunner } from '../engine/workflow-runner.js';
@@ -583,9 +583,9 @@ apiRouter.post('/api/v1/agents/:id/chat', async (req: Request, res: Response, ne
       return;
     }
 
-    const model = agent.configuration?.model || (agentId === 'AG-001' || agentId === 'AG-003' ? 'gemini-2.5-pro' : 'gemini-2.5-flash');
+    const model = agent.configuration?.model || (agentId === 'AG-001' || agentId === 'AG-003' ? 'claude-sonnet-5-5' : 'claude-haiku-5-5');
 
-    const result = await geminiService.chatWithAgent({
+    const result = await llmService.chatWithAgent({
       agentId,
       systemInstruction: agent.system_prompt,
       message,
@@ -733,23 +733,23 @@ apiRouter.get('/api/v1/artifacts', async (_req: Request, res: Response, next: Ne
 });
 
 // ------------------------------------------------------------------------------
-// 13. GET & POST /api/v1/system/llm-key (Status e Configuração Dinâmica Gemini)
+// 13. GET & POST /api/v1/system/llm-key (Status e Configuração Dinâmica Multi-Provider)
 // ------------------------------------------------------------------------------
 apiRouter.get('/api/v1/system/llm-status', (_req: Request, res: Response) => {
   res.json({
     success: true,
-    ...geminiService.getStatus()
+    ...llmService.getStatus()
   });
 });
 
 apiRouter.post('/api/v1/system/llm-key', (req: Request, res: Response) => {
   const { apiKey } = req.body || {};
-  const result = geminiService.setApiKey(apiKey || '');
+  const result = llmService.setApiKey(apiKey || '');
   res.json({
     success: true,
     ...result,
     message: result.configured
-      ? 'Chave Google Gemini API ativada com sucesso em produção!'
+      ? 'LLM API configurada com sucesso!'
       : 'Modo Especialista Determinístico EI-AIOS ativado.'
   });
 });

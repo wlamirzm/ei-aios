@@ -3,7 +3,7 @@
 // ==============================================================================
 
 import { EnergyBillExtraction, EnergyBillExtractionSchema } from '@ei-aios/shared';
-import { geminiService } from '../config/gemini.js';
+import { llmService } from '../config/llm.js';
 
 export interface ParseBillOptions {
   taskId: string;
@@ -45,7 +45,7 @@ Retorne estritamente o JSON válido conforme a estrutura.`;
   }
 
   try {
-    const result = await geminiService.generateStructuredContent<EnergyBillExtraction>({
+    const result = await llmService.generateStructuredContent<EnergyBillExtraction>({
       taskId: options.taskId,
       agentId: 'AG-004',
       clientId: options.clientId || null,
@@ -53,7 +53,7 @@ Retorne estritamente o JSON válido conforme a estrutura.`;
       executionId: options.executionId || `ocr_${Date.now()}`,
       isInternal: !options.clientId,
       origin: 'bill_parser',
-      model: 'gemini-2.5-flash',
+      model: 'claude-haiku-5-5',
       prompt,
       files: files.length > 0 ? files : undefined
     });
@@ -61,7 +61,7 @@ Retorne estritamente o JSON válido conforme a estrutura.`;
     const parsed = EnergyBillExtractionSchema.parse(result.data);
     return parsed;
   } catch (error) {
-    console.warn('[BillParser] Failed to parse multimodal bill with Gemini, using structured fallback:', error);
+    console.warn('[BillParser] Failed to parse multimodal bill, using structured fallback:', error);
     // Em caso de fallback ou arquivo vazio para testes rápidos
     return {
       consumer_unit_code: options.consumerUnitHint || '9876543210',
