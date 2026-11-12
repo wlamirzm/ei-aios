@@ -349,13 +349,14 @@ export class LLMService {
     let lastErr: any = null;
     for (const candidate of candidates) {
       try {
-        const response = await this.bedrockClient.messages.create({
+        const reqParams = {
           model: candidate,
           max_tokens: 16000,
           temperature: params.temperature ?? 0.1,
           system: systemText.trim(),
           messages: [{ role: 'user', content: contentBlocks }]
-        });
+        } as any;
+        const response = await this.bedrockClient.messages.create(reqParams);
         const rawText = response.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') || '{}';
         JSON.parse(rawText);
         return { rawText, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, modelUsed: candidate, provider: 'bedrock' };
@@ -373,9 +374,8 @@ export class LLMService {
     let lastErr: any = null;
     for (const candidate of candidates) {
       try {
-        const response = await this.bedrockClient.messages.create({
-          model: candidate, max_tokens: 4096, temperature, system: systemText, messages
-        });
+        const reqParams = { model: candidate, max_tokens: 4096, temperature, system: systemText, messages } as any;
+        const response = await this.bedrockClient.messages.create(reqParams);
         const rawText = response.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('') || 'Sem resposta do modelo.';
         return { rawText, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, modelUsed: candidate, provider: 'bedrock' };
       } catch (err: any) {
