@@ -54,8 +54,11 @@ jobs:
             cd /opt/ei-aios
             git fetch origin main
             git reset --hard origin/main
-            if [ -f .env ] && [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
-              sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}|" .env || true
+            if [ -f .env ]; then
+              [ -n "${{ secrets.GEMINI_API_KEY }}" ] && sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}|" .env || true
+              [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ] && sed -i "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}|" .env || true
+              [ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ] && sed -i "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}|" .env || true
+              [ -n "${{ secrets.AWS_REGION }}" ] && sed -i "s|^AWS_REGION=.*|AWS_REGION=${{ secrets.AWS_REGION }}|" .env || true
             fi
             bash docker/deploy.sh
             echo "🎉 [CI/CD] Deploy concluído com sucesso!"
