@@ -3,7 +3,7 @@
 // ==============================================================================
 
 import { QAReview, QAReviewSchema, TaskModel, ExecutionContext } from '@ei-aios/shared';
-import { geminiService } from '../config/gemini.js';
+import { llmService } from '../config/llm.js';
 import { getAgentDefinition } from '../agents/registry.js';
 
 export class QAGate {
@@ -70,7 +70,7 @@ Retorne EXCLUSIVAMENTE um JSON válido com estas chaves exatas:
         task.consumer_unit_id || task.input_payload?.consumer_unit_id || context?.consumerUnitId || null;
       const effectiveExecutionId = context?.executionId || task.input_payload?.lease_token || null;
 
-      const result = await geminiService.generateStructuredContent<QAReview>({
+      const result = await llmService.generateStructuredContent<QAReview>({
         taskId: task.id,
         agentId: 'AG-008',
         clientId: effectiveClientId,

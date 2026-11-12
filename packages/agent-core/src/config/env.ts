@@ -14,7 +14,16 @@ const EnvSchema = z.object({
   WORKER_POLL_INTERVAL_MS: z.coerce.number().default(5000),
   TASK_TIMEOUT_MS: z.coerce.number().default(300000), // 5 minutos default
   
-  GEMINI_API_KEY: z.string().optional().default('mock-key-for-dev'),
+  LLM_PRIMARY_PROVIDER: z.enum(['bedrock', 'gemini']).default('bedrock'),
+  LLM_FALLBACK_ENABLED: z.coerce.boolean().default(true),
+
+  AWS_REGION: z.string().default('us-east-1'),
+  AWS_ACCESS_KEY_ID: z.string().optional(),
+  AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  CLAUDE_DEFAULT_FAST_MODEL: z.string().default('claude-haiku-5-5'),
+  CLAUDE_DEFAULT_REASONING_MODEL: z.string().default('claude-sonnet-5-5'),
+
+  GEMINI_API_KEY: z.string().optional(),
   GEMINI_DEFAULT_FAST_MODEL: z.string().default('gemini-3.5-flash-lite'),
   GEMINI_DEFAULT_REASONING_MODEL: z.string().default('gemini-3.8-flash'),
   

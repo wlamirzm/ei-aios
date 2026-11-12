@@ -5,7 +5,7 @@
 
 import tls from 'node:tls';
 import { supabase } from '../config/supabase.js';
-import { geminiService } from '../config/gemini.js';
+import { llmService } from '../config/llm.js';
 import { getAgentDefinition } from '../agents/registry.js';
 import { autonomousWorker } from '../engine/worker.js';
 import { agentRouter } from '../engine/agent-router.js';
@@ -706,7 +706,7 @@ Retorne EXCLUSIVAMENTE um JSON válido com estas chaves exatas:
 }`;
 
   try {
-    const result = await geminiService.generateStructuredContent<AG012EmailAnalysis>({
+    const result = await llmService.generateStructuredContent<AG012EmailAnalysis>({
       taskId: 'email-analysis-' + Date.now(),
       agentId: AgentId.AG_012,
       clientId: null,

@@ -3,7 +3,7 @@
 // ==============================================================================
 
 import { AgentId, TaskModel, ExecutionContext } from '@ei-aios/shared';
-import { geminiService } from '../config/gemini.js';
+import { llmService } from '../config/llm.js';
 import { supabase } from '../config/supabase.js';
 import { getAgentDefinition } from './registry.js';
 import { runEnergyAudit } from '../tools/energy-calculator.js';
@@ -138,7 +138,7 @@ export async function executeAgentTask(task: TaskModel, context?: ExecutionConte
     };
   }
 
-  // 2. Constrói o Prompt contextualizado para a Gemini API
+  // 2. Constrói o Prompt contextualizado para a LLM API
   // Sanitiza o input_payload removendo tokens e metadados internos de orquestração (lease_token)
   const sanitizedInput = { ...(task.input_payload || {}) };
   delete sanitizedInput.lease_token;
@@ -165,14 +165,14 @@ Retorne exclusivamente um objeto JSON válido contendo obrigatoriamente:
 - "limitations": lista de limitações e ressalvas regulatórias
 - além dos campos estruturados específicos da sua especialidade.`;
 
-  // 3. Invocação ao Gemini com propagação integral de contexto operacional e financeiro (S6-01)
+  // 3. Invocação LLM com propagação integral de contexto operacional e financeiro (S6-01)
   const effectiveClientId = task.client_id || context?.clientId || null;
   const effectiveConsumerUnitId =
     task.consumer_unit_id || task.input_payload?.consumer_unit_id || context?.consumerUnitId || null;
   const effectiveExecutionId = context?.executionId || task.input_payload?.lease_token || null;
   const isInternal = !effectiveClientId;
 
-  const response = await geminiService.generateStructuredContent({
+  const response = await llmService.generateStructuredContent({
     taskId: task.id,
     agentId: task.assigned_agent_id,
     clientId: effectiveClientId,

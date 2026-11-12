@@ -11,7 +11,7 @@ import {
   ActionRiskLevel,
   WorkflowCode
 } from '@ei-aios/shared';
-import { geminiService } from '../config/gemini.js';
+import { llmService } from '../config/llm.js';
 import { supabase } from '../config/supabase.js';
 import { getAgentDefinition } from '../agents/registry.js';
 import { agentRouter } from './agent-router.js';
@@ -81,7 +81,7 @@ Sua missão como AG-001 (AI Orchestrator):
   ]
 }`;
 
-    const result = await geminiService.generateStructuredContent<OrchestratorPlan>({
+    const result = await llmService.generateStructuredContent<OrchestratorPlan>({
       taskId: 'planning-' + Date.now(),
       agentId: AgentId.AG_001,
       clientId: input.clientId || null,
@@ -98,7 +98,7 @@ Sua missão como AG-001 (AI Orchestrator):
     const parsedPlan = OrchestratorPlanSchema.safeParse(result.data);
     const plan: OrchestratorPlan = parsedPlan.success
       ? parsedPlan.data
-      : OrchestratorPlanSchema.parse(geminiService.getFallbackDecompositionPlan(input.objective));
+      : OrchestratorPlanSchema.parse(llmService.getFallbackDecompositionPlan(input.objective));
 
     // 1. Cria a Tarefa-Mãe (Macro Objective)
     const taskCodeRoot = `MACRO-${Date.now().toString().slice(-6)}`;
@@ -336,7 +336,7 @@ Elabore a Síntese Executiva Consolidada do AG-001 retornando um objeto JSON vá
 - "assumptions": premissas consolidadas
 - "limitations": ressalvas técnicas e regulatórias`;
 
-    const synthesis = await geminiService.generateStructuredContent({
+    const synthesis = await llmService.generateStructuredContent({
       taskId: parentTaskId,
       agentId: AgentId.AG_001,
       clientId: parentTask.client_id || null,
