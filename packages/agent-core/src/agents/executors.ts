@@ -12,6 +12,7 @@ import { runFullCfoSnapshot, ClientFinancialContractInput } from '../tools/finop
 import { validateExtractedBillIntegrity } from '../tools/bill-parser.js';
 import { formatEnergyDiagnosisMarkdown, createAndSaveArtifact } from '../tools/artifact-writer.js';
 import { runMarketIntelligenceAudit, runProspectIntelligenceDossier } from '../tools/web-intelligence.js';
+import { SlideEngine } from '../tools/slide-engine.js';
 
 export interface AgentExecutionResult {
   outputPayload: Record<string, any>;
@@ -172,6 +173,46 @@ export async function executeAgentTask(task: TaskModel, context?: ExecutionConte
     deterministicContext = {
       deterministic_prospect_intelligence: prospectDossier
     };
+  } else if (task.assigned_agent_id === AgentId.AG_015) {
+    // AG-015: Apresentações Executivas & Pitch Decks (SlideEngine)
+    const clientName = input.client_name || input.company_name || 'Cliente B2B';
+    const isInvestorDeck = input.deck_type === 'investor' || String(task.objective || '').toLowerCase().includes('investidor') || String(task.objective || '').toLowerCase().includes('captação');
+
+    if (isInvestorDeck) {
+      const [{ data: clientsRows }, { data: billsRows }] = await Promise.all([
+        supabase.from('clients').select('mrr_brl'),
+        supabase.from('energy_bills').select('potential_savings_brl')
+      ]);
+      const mrrTotal = (clientsRows || []).reduce((acc, c) => acc + (Number(c.mrr_brl) || 0), 0);
+      const savingsTotal = (billsRows || []).reduce((acc, b) => acc + (Number(b.potential_savings_brl) || 0), 0);
+
+      const investorDeck = SlideEngine.buildInvestorPitchDeck({
+        mrrBrl: mrrTotal || 15000,
+        clientsCount: clientsRows?.length || 5,
+        totalSavingsFoundBrl: savingsTotal || 320000,
+        askBrl: input.ask_brl || 'R$ 1.500.000'
+      });
+      const marpMarkdown = SlideEngine.generateMarpMarkdown(investorDeck);
+      deterministicContext = {
+        deterministic_slide_deck: investorDeck,
+        marp_markdown: marpMarkdown
+      };
+    } else {
+      const salesDeck = SlideEngine.buildSalesPitchDeck({
+        clientName,
+        annualSavingsBrl: Number(input.annual_savings_brl || input.total_annual_potential_savings_brl || 120000),
+        monthlySavingsBrl: Number(input.monthly_savings_brl || input.total_monthly_potential_savings_brl || 10000),
+        recommendedModality: input.recommended_modality || 'HOROSSAZONAL_VERDE',
+        overageBrl: Number(input.overage_penalty_brl || input.overage_brl || 0),
+        powerFineBrl: Number(input.reactive_fine_brl || input.power_fine_brl || 0),
+        successFeePercent: Number(input.success_fee_percent || 20)
+      });
+      const marpMarkdown = SlideEngine.generateMarpMarkdown(salesDeck);
+      deterministicContext = {
+        deterministic_slide_deck: salesDeck,
+        marp_markdown: marpMarkdown
+      };
+    }
   }
 
   // 2. Constrói o Prompt contextualizado para a LLM API
@@ -248,7 +289,9 @@ Retorne exclusivamente um objeto JSON válido contendo obrigatoriamente:
     });
   } else {
     const mappedType =
-      task.assigned_agent_id === AgentId.AG_007
+      task.assigned_agent_id === AgentId.AG_015
+        ? 'pitch_deck'
+        : task.assigned_agent_id === AgentId.AG_007
         ? 'commercial_proposal'
         : task.assigned_agent_id === AgentId.AG_009
         ? 'contest_dossier'
@@ -257,7 +300,9 @@ Retorne exclusivamente um objeto JSON válido contendo obrigatoriamente:
         : 'strategic_plan';
 
     const title = outputPayload.deliverable_title || `${task.assigned_agent_id} — ${task.objective.slice(0, 80)}`;
-    const mdBody = outputPayload.executive_summary_markdown
+    const mdBody = deterministicContext?.marp_markdown
+      ? deterministicContext.marp_markdown
+      : outputPayload.executive_summary_markdown
       ? outputPayload.executive_summary_markdown
       : `# ${title}\n\n> **Agente Responsável:** ${task.assigned_agent_id} • **Objetivo:** ${task.objective}\n\n## Sumário Executivo\nEntregável técnico concluído e estruturado conforme padrões corporativos da Energy Intelligence.`;
 
