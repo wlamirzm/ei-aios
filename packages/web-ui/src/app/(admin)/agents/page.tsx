@@ -165,6 +165,7 @@ export default function AgentsPage() {
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
   const [cleaning, setCleaning] = useState(false);
   const [llmConfigured, setLlmConfigured] = useState(false);
+  const [llmStatus, setLlmStatus] = useState<any>(null);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [savingKey, setSavingKey] = useState(false);
 
@@ -176,7 +177,10 @@ export default function AgentsPage() {
 
   useEffect(() => {
     fetchLlmStatus()
-      .then((res) => setLlmConfigured(Boolean(res?.configured)))
+      .then((res) => {
+        setLlmStatus(res);
+        setLlmConfigured(Boolean(res?.configured));
+      })
       .catch(() => {});
 
     fetchAgents()
@@ -187,7 +191,7 @@ export default function AgentsPage() {
               id: a.id,
               name: a.name,
               role: a.role_description,
-              model: a.configuration?.model || 'gemini-2.5-flash',
+              model: a.configuration?.model || (a.id === 'AG-001' || a.id === 'AG-003' || a.id === 'AG-008' || a.id === 'AG-009' || a.id === 'AG-013' ? 'claude-sonnet-5-5' : 'claude-haiku-5-5'),
               temperature: a.configuration?.temperature ?? 0.2,
               daily_budget: a.configuration?.daily_budget_usd ?? 5.0,
               enabled: a.enabled ?? true,
@@ -204,6 +208,7 @@ export default function AgentsPage() {
     try {
       const res = await setLlmApiKey(apiKeyInput);
       setLlmConfigured(Boolean(res?.configured));
+      fetchLlmStatus().then((s) => setLlmStatus(s)).catch(() => {});
       setApiKeyInput('');
       setSavedMsg(res?.message || 'Configuração de motor de IA atualizada!');
       setTimeout(() => setSavedMsg(null), 5000);
@@ -328,23 +333,49 @@ export default function AgentsPage() {
         </div>
       )}
 
-      {/* MOTOR DE IA: STATUS & CHAVE GEMINI API */}
+      {/* MOTOR DE IA: STATUS MULTI-PROVIDER & CHAVE GEMINI API */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-lg border ${llmConfigured ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400'}`}>
             <KeyRound className="w-4 h-4" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-bold text-white">Motor Cognitivo:</span>
-              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${llmConfigured ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-400' : 'bg-indigo-950/60 border-indigo-500/40 text-indigo-300'}`}>
-                {llmConfigured ? 'GOOGLE GEMINI 2.5 LIVE API' : 'MOTOR ESPECIALISTA CONTEXTUAL EI-AIOS'}
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                llmStatus?.mode === 'bedrock_live_api'
+                  ? 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+                  : llmStatus?.mode === 'gemini_fallback_api'
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-400'
+                  : llmStatus?.mode === 'gemini_live_api'
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-400'
+                  : 'bg-indigo-950/60 border-indigo-500/40 text-indigo-300'
+              }`}>
+                {llmStatus?.mode === 'bedrock_live_api'
+                  ? 'AWS BEDROCK (CLAUDE 3.5 / 3.7) LIVE API'
+                  : llmStatus?.mode === 'gemini_fallback_api'
+                  ? 'GOOGLE GEMINI (FALLBACK ATIVO)'
+                  : llmStatus?.mode === 'gemini_live_api'
+                  ? 'GOOGLE GEMINI LIVE API'
+                  : 'MOTOR ESPECIALISTA CONTEXTUAL EI-AIOS'}
               </span>
+              {llmStatus?.bedrockReady && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                  Bedrock Conectado
+                </span>
+              )}
+              {llmStatus?.geminiReady && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  Gemini Pronto
+                </span>
+              )}
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              {llmConfigured
-                ? 'Conectado diretamente à API oficial Google Gemini 2.5.'
-                : 'Respostas contextuais conectadas ao PostgreSQL em tempo real. Opcionalmente, insira sua GEMINI_API_KEY do Google AI Studio ao lado.'}
+              {llmStatus?.mode === 'bedrock_live_api'
+                ? 'Conectado à AWS Bedrock (Claude 3.5 Sonnet / Haiku) com contingência automática para o Google Gemini.'
+                : llmStatus?.mode === 'gemini_fallback_api'
+                ? 'Operando via contingência Google Gemini devido a indisponibilidade ou ausência de credenciais no Bedrock.'
+                : 'Respostas contextuais com fallback para Gemini ou Bedrock. Você pode ajustar chaves adicionais ao lado.'}
             </p>
           </div>
         </div>
@@ -354,7 +385,7 @@ export default function AgentsPage() {
             type="password"
             value={apiKeyInput}
             onChange={(e) => setApiKeyInput(e.target.value)}
-            placeholder="Colar GEMINI_API_KEY (AIza...)"
+            placeholder="Atualizar GEMINI_API_KEY..."
             className="w-full md:w-64 bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-purple-500"
           />
           <button
@@ -362,7 +393,7 @@ export default function AgentsPage() {
             disabled={savingKey || !apiKeyInput.trim()}
             className="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white px-3.5 py-1.5 rounded-lg text-xs font-semibold transition whitespace-nowrap"
           >
-            {savingKey ? 'Ativando...' : 'Ativar Chave'}
+            {savingKey ? 'Salvando...' : 'Salvar Chave'}
           </button>
         </div>
       </div>
@@ -397,8 +428,18 @@ export default function AgentsPage() {
                     }}
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-purple-500"
                   >
-                    <option value="gemini-2.5-flash">gemini-2.5-flash (Rápido / Extração)</option>
-                    <option value="gemini-2.5-pro">gemini-2.5-pro (Raciocínio Complexo)</option>
+                    <optgroup label="AWS Bedrock (Anthropic Claude)">
+                      <option value="claude-sonnet-5-5">Claude 3.5 Sonnet (Raciocínio & Auditoria)</option>
+                      <option value="claude-haiku-5-5">Claude 3.5 Haiku (Rápido / Extração / FinOps)</option>
+                      <option value="claude-opus-5-5">Claude 3 Opus (Estratégia Avançada)</option>
+                    </optgroup>
+                    <optgroup label="Google Gemini">
+                      <option value="gemini-3.8-flash">Gemini 3.8 Flash (Raciocínio & Análise)</option>
+                      <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (Alta Velocidade)</option>
+                      <option value="gemini-4-argon">Gemini 4 Argon (Raciocínio Profundo)</option>
+                      <option value="gemini-2.5-pro">Gemini 2.5 Pro (Legado)</option>
+                      <option value="gemini-2.5-flash">Gemini 2.5 Flash (Legado)</option>
+                    </optgroup>
                   </select>
                 </div>
 
