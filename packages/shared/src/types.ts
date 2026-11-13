@@ -23,7 +23,15 @@ import {
   FinOpsMetricsSchema,
   CreateObjectiveRequestSchema,
   DecideApprovalRequestSchema,
-  TriggerWorkerRequestSchema
+  TriggerWorkerRequestSchema,
+  WebSearchResultSchema,
+  ScrapedPageDataSchema,
+  DecisionMakerSchema,
+  TargetSubgroupSchema,
+  QualificationGradeSchema,
+  ProspectProfileSchema,
+  CompetitorProfileSchema,
+  MarketIntelligenceDossierSchema
 } from './schemas.js';
 
 import {
@@ -62,6 +70,14 @@ export type FinOpsMetrics = z.infer<typeof FinOpsMetricsSchema>;
 export type CreateObjectiveRequest = z.infer<typeof CreateObjectiveRequestSchema>;
 export type DecideApprovalRequest = z.infer<typeof DecideApprovalRequestSchema>;
 export type TriggerWorkerRequest = z.infer<typeof TriggerWorkerRequestSchema>;
+export type WebSearchResult = z.infer<typeof WebSearchResultSchema>;
+export type ScrapedPageData = z.infer<typeof ScrapedPageDataSchema>;
+export type DecisionMaker = z.infer<typeof DecisionMakerSchema>;
+export type TargetSubgroup = z.infer<typeof TargetSubgroupSchema>;
+export type QualificationGrade = z.infer<typeof QualificationGradeSchema>;
+export type ProspectProfile = z.infer<typeof ProspectProfileSchema>;
+export type CompetitorProfile = z.infer<typeof CompetitorProfileSchema>;
+export type MarketIntelligenceDossier = z.infer<typeof MarketIntelligenceDossierSchema>;
 
 // Supabase Database Row Models
 export interface AgentModel {

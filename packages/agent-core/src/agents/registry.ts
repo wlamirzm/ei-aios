@@ -59,7 +59,7 @@ Regras:
     dailyBudgetUsd: 8.00,
     approvalRequiredActions: [],
     enabled: true,
-    tools: ['market_analyzer', 'swot_generator', 'icp_scorer'],
+    tools: ['market_analyzer', 'swot_generator', 'icp_scorer', 'web_search', 'competitor_benchmarker'],
     permissions: {
       database_read: true,
       database_write: false,
@@ -157,7 +157,7 @@ Restrições: Nunca executar alterações estruturais em produção ou expor seg
     dailyBudgetUsd: 6.00,
     approvalRequiredActions: ['external_proposal_delivery', 'commercial_commitment'],
     enabled: true,
-    tools: ['proposal_generator', 'lead_qualifier', 'loi_builder'],
+    tools: ['proposal_generator', 'lead_qualifier', 'loi_builder', 'web_prospector', 'domain_enricher', 'icp_scorer'],
     permissions: {
       database_read: true,
       database_write: true,

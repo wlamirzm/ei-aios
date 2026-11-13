@@ -11,6 +11,7 @@ import { calculateMeasurementAndVerification } from '../tools/mv-calculator.js';
 import { runFullCfoSnapshot, ClientFinancialContractInput } from '../tools/finops-calculator.js';
 import { validateExtractedBillIntegrity } from '../tools/bill-parser.js';
 import { formatEnergyDiagnosisMarkdown, createAndSaveArtifact } from '../tools/artifact-writer.js';
+import { runMarketIntelligenceAudit, runProspectIntelligenceDossier } from '../tools/web-intelligence.js';
 
 export interface AgentExecutionResult {
   outputPayload: Record<string, any>;
@@ -135,6 +136,41 @@ export async function executeAgentTask(task: TaskModel, context?: ExecutionConte
 
     deterministicContext = {
       regulatory_knowledge: relevantSources.length > 0 ? relevantSources : knowledgeRows || []
+    };
+  } else if (task.assigned_agent_id === AgentId.AG_002) {
+    // AG-002: Inteligência de Mercado, Análise de Concorrentes e Validação de ICP
+    const query = input.market_query || input.query || task.objective || 'Mercado Livre de Energia Grupo A4';
+    const sector = input.sector || input.target_sector || undefined;
+    const competitors = input.competitors || input.target_competitors || undefined;
+    const marketAudit = await runMarketIntelligenceAudit({
+      query,
+      sector,
+      competitors
+    });
+    deterministicContext = {
+      deterministic_market_intelligence: marketAudit
+    };
+  } else if (task.assigned_agent_id === AgentId.AG_007) {
+    // AG-007: Prospecção B2B, Enriquecimento de Domínio e Qualificação de ICP
+    const companyName = input.company_name || input.prospect_name || input.lead_name || 'Prospect Alvo';
+    const domain = input.domain || input.prospect_domain || undefined;
+    const rawText = input.raw_text || input.prospect_notes || undefined;
+    const sector = input.sector || input.prospect_sector || undefined;
+    const distributor = input.distributor || undefined;
+    const estimatedUnitsCount = input.estimated_units_count || input.units_count || undefined;
+    const targetSubgroup = input.target_subgroup || undefined;
+
+    const prospectDossier = await runProspectIntelligenceDossier({
+      companyName,
+      domain,
+      rawText,
+      sector,
+      distributor,
+      estimatedUnitsCount,
+      targetSubgroup
+    });
+    deterministicContext = {
+      deterministic_prospect_intelligence: prospectDossier
     };
   }
 

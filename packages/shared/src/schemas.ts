@@ -428,3 +428,70 @@ export const TriggerWorkerRequestSchema = z.object({
   force_cycle: z.boolean().default(true)
 });
 
+// ------------------------------------------------------------------------------
+// 10. WEB INTELLIGENCE & MARKET PROSPECTING SCHEMAS
+// ------------------------------------------------------------------------------
+export const WebSearchResultSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  snippet: z.string(),
+  domain: z.string(),
+  publishedDate: z.string().optional()
+});
+
+export const ScrapedPageDataSchema = z.object({
+  url: z.string(),
+  title: z.string(),
+  textContent: z.string(),
+  metaDescription: z.string().optional(),
+  extractedEmails: z.array(z.string()).default([]),
+  extractedPhones: z.array(z.string()).default([]),
+  extractedCnpjs: z.array(z.string()).default([]),
+  socialLinks: z.array(z.string()).default([])
+});
+
+export const DecisionMakerSchema = z.object({
+  name: z.string().optional(),
+  role: z.string(),
+  linkedinUrl: z.string().optional()
+});
+
+export const TargetSubgroupSchema = z.enum(['A4', 'A3', 'A3a', 'B_OPTANTE', 'UNKNOWN']);
+export const QualificationGradeSchema = z.enum(['TIER_1', 'TIER_2', 'TIER_3', 'DISQUALIFIED']);
+
+export const ProspectProfileSchema = z.object({
+  companyName: z.string(),
+  tradeName: z.string().optional(),
+  domain: z.string(),
+  cnpj: z.string().optional(),
+  sector: z.string(),
+  targetSubgroup: TargetSubgroupSchema,
+  estimatedUnitsCount: z.number().default(1),
+  energyPainPoints: z.array(z.string()).default([]),
+  decisionMakers: z.array(DecisionMakerSchema).default([]),
+  icpFitScore: z.number().min(0).max(100),
+  qualificationGrade: QualificationGradeSchema,
+  recommendedOutreachAngle: z.string()
+});
+
+export const CompetitorProfileSchema = z.object({
+  competitorName: z.string(),
+  serviceOfferings: z.array(z.string()).default([]),
+  targetAudience: z.string(),
+  pricingModel: z.string(),
+  strengths: z.array(z.string()).default([]),
+  vulnerabilities: z.array(z.string()).default([]),
+  sourceUrls: z.array(z.string()).default([])
+});
+
+export const MarketIntelligenceDossierSchema = z.object({
+  topic: z.string(),
+  timestamp: z.string(),
+  topSources: z.array(WebSearchResultSchema).default([]),
+  competitors: z.array(CompetitorProfileSchema).default([]),
+  sectoralTrends: z.array(z.string()).default([]),
+  regulatorySignals: z.array(z.string()).default([]),
+  strategicRecommendations: z.array(z.string()).default([])
+});
+
+
