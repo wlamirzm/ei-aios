@@ -38,7 +38,10 @@ const EnvSchema = z.object({
   FOUNDER_EMAIL: z.string().default('fundador@energyintelligence.com.br'),
   FOUNDER_PASSWORD: z.string().default('EI-AIOS-2026!'),
   
-  N8N_WEBHOOK_URL: z.string().url().default('http://localhost:5678/webhook')
+  N8N_WEBHOOK_URL: z.string().url().default('http://localhost:5678/webhook'),
+
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_ADMIN_CHAT_ID: z.string().optional()
 });
 
 export type Env = z.infer<typeof EnvSchema>;

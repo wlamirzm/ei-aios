@@ -1538,3 +1538,39 @@ apiRouter.get('/api/v1/reports/:token', async (req: Request, res: Response, next
   }
 });
 
+// ------------------------------------------------------------------------------
+// TELEGRAM CONCIERGE & HITL WEBHOOK (AG-016)
+// ------------------------------------------------------------------------------
+apiRouter.post('/api/v1/telegram/webhook', async (req: Request, res: Response) => {
+  try {
+    const update = req.body;
+    const { telegramConcierge } = await import('../tools/telegram-concierge.js');
+
+    // Callback Query (Botões inline de Aprovação/Rejeição de Nível 2)
+    if (update.callback_query) {
+      const result = await telegramConcierge.handleCallbackQuery(update.callback_query);
+      res.json({ ok: true, result });
+      return;
+    }
+
+    // Mensagem de Texto (Comandos /status, /kpis ou Instruções Estratégicas)
+    if (update.message && update.message.text) {
+      const senderId = String(update.message.from.id);
+      const text = update.message.text;
+      const reply = await telegramConcierge.handleIncomingTextMessage(senderId, text);
+      await telegramConcierge.sendMessage({
+        chatId: senderId,
+        text: reply
+      });
+      res.json({ ok: true });
+      return;
+    }
+
+    res.json({ ok: true, ignored: true });
+  } catch (err: any) {
+    console.error('[TelegramWebhook] Error handling update:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+

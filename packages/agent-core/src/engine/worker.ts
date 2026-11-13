@@ -408,6 +408,17 @@ export class AutonomousWorker {
 
         // Dispara notificação externa via n8n webhook se configurado
         this.notifyN8nApproval(task, postPolicy.approvalReason);
+
+        // Notificação instantânea via Telegram Concierge (AG-016)
+        import('../tools/telegram-concierge.js').then(({ telegramConcierge }) => {
+          telegramConcierge.notifyPendingApproval({
+            id: task.id,
+            task_code: task.task_code,
+            assigned_agent_id: task.assigned_agent_id,
+            objective: task.objective,
+            risk_level: task.risk_level
+          }).catch(err => console.error('[AutonomousWorker] Telegram push notification failed:', err));
+        }).catch(() => {});
       } else {
         // S5-03: Conclusão atômica com validação de lease contra conclusões tardias/zumbis
         if (leaseToken) {

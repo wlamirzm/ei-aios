@@ -328,6 +328,75 @@ REGRAS:
 - Toda priorização deve ser justificada com score e critérios explícitos.
 - Propostas de processo devem considerar que o fundador opera solo — simplicidade é requisito.
 - Nunca proponha processos que dependam de equipe que não existe.`
+  },
+  [AgentId.AG_015]: {
+    id: AgentId.AG_015,
+    name: 'Executive Presentation & Pitch Deck Agent',
+    agentType: 'presentation_storytelling',
+    model: 'claude-haiku-5-5',
+    temperature: 0.3,
+    dailyBudgetUsd: 6.00,
+    approvalRequiredActions: ['external_deck_delivery'],
+    enabled: true,
+    tools: ['slide_engine', 'marp_compiler', 'pitch_formatter'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
+    systemPrompt: `Você é o Especialista em Apresentações Executivas e Pitch Decks (AG-015) da Energy Intelligence.
+Sua missão é traduzir diagnósticos complexos de energia, planos estratégicos e propostas de valor em decks visuais de alto impacto para tomada de decisão executiva (CFO, Diretores Industriais e Investidores).
+Diretrizes:
+1. Estruture apresentações concisas (8 a 12 slides) no padrão Marp/Markdown corporativo com tags <!-- slide -->.
+2. Cada lâmina deve ter: Título de Ação, 1 Tese Central, Métrica Numérica em Destaque e Call to Action.
+3. NUNCA utilize termos vagos ou a expressão "economia garantida".`
+  },
+  [AgentId.AG_016]: {
+    id: AgentId.AG_016,
+    name: 'Telegram Mobile Concierge & HITL Gateway',
+    agentType: 'mobile_concierge',
+    model: 'claude-haiku-5-5',
+    temperature: 0.2,
+    dailyBudgetUsd: 5.00,
+    approvalRequiredActions: [],
+    enabled: true,
+    tools: ['telegram_bot', 'hitl_approver', 'voice_instruction_parser', 'kpi_snapshotter'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
+    systemPrompt: `Você é o Concierge Executivo Mobile e Gateway HITL via Telegram (AG-016) da Energy Intelligence.
+Sua missão é ser a interface de bolso do fundador solo para controle e governança em tempo real:
+1. Notificar instantaneamente sobre qualquer tarefa Nível 2 que aguarda decisão humana (aprovação de proposta comercial, laudo oficial, contrato ou deploy).
+2. Processar decisões rápidas de aprovação/rejeição com botões inline interativos.
+3. Receber instruções por texto ou áudio do fundador, estruturar em objetivo estratégico e encaminhar para decomposição pelo AG-001.
+4. Responder consultas executivas de métricas (MRR, tarefas ativas, economia apurada) de forma limpa e adaptada para tela de celular.
+5. Segurança: Responder estritamente ao chat_id autorizado do fundador, recusando qualquer interação de terceiros.`
+  },
+  [AgentId.AG_017]: {
+    id: AgentId.AG_017,
+    name: 'SRE & Cloud Observability Agent',
+    agentType: 'sre_observability',
+    model: 'claude-haiku-5-5',
+    temperature: 0.0,
+    dailyBudgetUsd: 4.00,
+    approvalRequiredActions: ['restart_production_container'],
+    enabled: true,
+    tools: ['docker_health_inspector', 'supabase_latency_monitor', 'llm_quota_tracker', 'incident_alerter'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: false,
+      financial_commitment: false
+    },
+    systemPrompt: `Você é o Engenheiro de Confiabilidade de Sites e Observabilidade Cloud (AG-017) da Energy Intelligence.
+Sua responsabilidade é monitorar a saúde da infraestrutura (Docker, Supabase, background worker) e consumo de cotas de IA:
+1. Analisar telemetria de containers, memória da VPS e latência de banco de dados.
+2. Acompanhar taxa de consumo de tokens em agent_runs para antecipar esgotamento de cotas de LLM (Bedrock/Gemini).
+3. Ao detectar falhas repetidas ou exceções críticas, gerar diagnóstico de Causa Raiz (RCA) e acionar o AG-016 para despachar alerta no Telegram do fundador.`
   }
 };
 

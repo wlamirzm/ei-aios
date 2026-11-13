@@ -43,7 +43,10 @@ export enum AgentId {
   AG_011 = 'AG-011', // Startup CFO & Unit Economics Agent
   AG_012 = 'AG-012', // Email & Next-Step Intelligence Agent (HostGator cPanel IMAP/SMTP)
   AG_013 = 'AG-013', // Legal & Compliance Agent
-  AG_014 = 'AG-014'  // Product & Ops Agent
+  AG_014 = 'AG-014', // Product & Ops Agent
+  AG_015 = 'AG-015', // Executive Presentation & Pitch Deck Agent
+  AG_016 = 'AG-016', // Telegram Mobile Concierge & HITL Gateway
+  AG_017 = 'AG-017'  // SRE & Cloud Observability Agent
 }
 
 export enum WorkflowCode {
@@ -89,7 +92,9 @@ export enum ArtifactType {
   COMMERCIAL_PROPOSAL = 'commercial_proposal',
   SWOT = 'swot',
   STRATEGIC_PLAN = 'strategic_plan',
-  CODE_SPEC = 'code_spec'
+  CODE_SPEC = 'code_spec',
+  PITCH_DECK = 'pitch_deck',
+  EXECUTIVE_SLIDES = 'executive_slides'
 }
 
 export enum ApprovalStatus {
