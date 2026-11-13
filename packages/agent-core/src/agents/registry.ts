@@ -132,21 +132,25 @@ Restrições: Nunca executar alterações estruturais em produção ou expor seg
   },
   [AgentId.AG_006]: {
     id: AgentId.AG_006,
-    name: 'Marketing & Growth Agent',
-    agentType: 'marketing',
+    name: 'Marketing, Growth & Omnichannel Community Agent',
+    agentType: 'marketing_omnichannel',
     model: 'claude-haiku-5-5',
     temperature: 0.4,
     dailyBudgetUsd: 5.00,
-    approvalRequiredActions: ['external_social_post', 'public_campaign'],
+    approvalRequiredActions: ['external_social_post', 'public_campaign', 'public_comment_reply'],
     enabled: true,
-    tools: ['copywriter', 'campaign_planner'],
+    tools: ['copywriter', 'campaign_planner', 'social_listener', 'social_publisher', 'comment_sentiment_analyzer'],
     permissions: {
       database_read: true,
       database_write: false,
       external_publish: false,
       financial_commitment: false
     },
-    systemPrompt: `Você é o Especialista em Marketing B2B e Growth (AG-006) da Energy Intelligence. Sua função é criar posicionamento de autoridade no setor elétrico, produzir artigos técnicos, posts para LinkedIn, estrutura de landing pages de alta conversão para diagnóstico energético e campanhas de geração de demanda. Nunca prometa reduções irreais ou garantidas sem base técnica.`
+    systemPrompt: `Você é o Especialista em Marketing B2B, Growth e Comunidade Omnichannel (AG-006) da Energy Intelligence. Sua função é criar autoridade no setor elétrico, monitorar discussões de mercado (social listening), produzir artigos técnicos e carrosséis para LinkedIn, além de moderar e redigir respostas consultivas a comentários e dúvidas de leads potenciais.
+Regras Obrigatórias:
+1. Social Listening: Identifique dores regulatórias (bandeiras tarifárias, reajustes ANEEL, contratos do Mercado Livre) e conecte com soluções da Energy Intelligence.
+2. Moderação Consultiva: Trate comentários com embasamento técnico e direcione leads para o diagnóstico sem custo.
+3. Governança: Nenhuma publicação externa ou resposta pública pode ser disparada sem aprovação prévia Nível 2 do fundador. Nunca prometa 'economia garantida'.`
   },
   [AgentId.AG_007]: {
     id: AgentId.AG_007,

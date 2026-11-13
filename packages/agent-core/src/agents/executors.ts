@@ -13,6 +13,7 @@ import { validateExtractedBillIntegrity } from '../tools/bill-parser.js';
 import { formatEnergyDiagnosisMarkdown, createAndSaveArtifact } from '../tools/artifact-writer.js';
 import { runMarketIntelligenceAudit, runProspectIntelligenceDossier } from '../tools/web-intelligence.js';
 import { SlideEngine } from '../tools/slide-engine.js';
+import { SocialIntelligenceEngine } from '../tools/social-intelligence.js';
 
 export interface AgentExecutionResult {
   outputPayload: Record<string, any>;
@@ -211,6 +212,30 @@ export async function executeAgentTask(task: TaskModel, context?: ExecutionConte
       deterministicContext = {
         deterministic_slide_deck: salesDeck,
         marp_markdown: marpMarkdown
+      };
+    }
+  } else if (task.assigned_agent_id === AgentId.AG_006) {
+    // AG-006: Marketing, Growth, Social Listening & Omnichannel Community
+    if (input.comment_text) {
+      const moderation = SocialIntelligenceEngine.analyzeCommentAndDraftReply({
+        commentText: input.comment_text,
+        postTopic: input.post_topic || task.objective
+      });
+      deterministicContext = {
+        deterministic_comment_moderation: moderation
+      };
+    } else {
+      const topic = input.topic || task.objective || 'Eficiência Energética para o Setor Industrial B2B';
+      const trends = SocialIntelligenceEngine.listenSectorTrends(input.keyword || topic);
+      const postDraft = SocialIntelligenceEngine.craftLinkedInPost({
+        topic,
+        targetAudience: input.target_audience,
+        caseStudySavingsBrl: Number(input.case_study_savings_brl || 145000),
+        format: input.format === 'carousel' ? 'carousel' : 'standard'
+      });
+      deterministicContext = {
+        deterministic_social_trends: trends,
+        deterministic_social_draft: postDraft
       };
     }
   }
