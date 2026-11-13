@@ -42,11 +42,17 @@ jobs:
     steps:
       - name: Execute Remote Deployment via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 44322 }}
+          envs: GEMINI_API_KEY,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,AWS_REGION
           script_stop: true
           command_timeout: 10m
           script: |
@@ -55,10 +61,31 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             if [ -f .env ]; then
-              [ -n "${{ secrets.GEMINI_API_KEY }}" ] && sed -i "s|^GEMINI_API_KEY=.*|GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}|" .env || true
-              [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ] && sed -i "s|^AWS_ACCESS_KEY_ID=.*|AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}|" .env || true
-              [ -n "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ] && sed -i "s|^AWS_SECRET_ACCESS_KEY=.*|AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}|" .env || true
-              [ -n "${{ secrets.AWS_REGION }}" ] && sed -i "s|^AWS_REGION=.*|AWS_REGION=${{ secrets.AWS_REGION }}|" .env || true
+              python3 -c "
+import os
+env_file = '.env'
+updates = {
+    'GEMINI_API_KEY': os.environ.get('GEMINI_API_KEY', ''),
+    'AWS_ACCESS_KEY_ID': os.environ.get('AWS_ACCESS_KEY_ID', ''),
+    'AWS_SECRET_ACCESS_KEY': os.environ.get('AWS_SECRET_ACCESS_KEY', ''),
+    'AWS_REGION': os.environ.get('AWS_REGION', ''),
+    'LLM_PRIMARY_PROVIDER': 'bedrock',
+    'LLM_FALLBACK_ENABLED': 'true'
+}
+lines = open(env_file, 'r').readlines() if os.path.exists(env_file) else []
+data = {}
+for l in lines:
+    clean = l.strip()
+    if clean and not clean.startswith('#') and '=' in clean:
+        k, v = clean.split('=', 1)
+        data[k] = v
+for k, v in updates.items():
+    if v:
+        data[k] = v
+with open(env_file, 'w') as f:
+    for k, v in data.items():
+        f.write(f'{k}={v}\n')
+"
             fi
             bash docker/deploy.sh
             echo "🎉 [CI/CD] Deploy concluído com sucesso!"
