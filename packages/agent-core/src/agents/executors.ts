@@ -14,6 +14,7 @@ import { formatEnergyDiagnosisMarkdown, createAndSaveArtifact } from '../tools/a
 import { runMarketIntelligenceAudit, runProspectIntelligenceDossier } from '../tools/web-intelligence.js';
 import { SlideEngine } from '../tools/slide-engine.js';
 import { SocialIntelligenceEngine } from '../tools/social-intelligence.js';
+import { SreMetricsCollector } from '../tools/sre-metrics-collector.js';
 
 export interface AgentExecutionResult {
   outputPayload: Record<string, any>;
@@ -236,6 +237,24 @@ export async function executeAgentTask(task: TaskModel, context?: ExecutionConte
       deterministicContext = {
         deterministic_social_trends: trends,
         deterministic_social_draft: postDraft
+      };
+    }
+  } else if (task.assigned_agent_id === AgentId.AG_017) {
+    // AG-017: SRE & Cloud Infrastructure Observability
+    if (input.error_message || input.incident_component) {
+      const rca = await SreMetricsCollector.runAutomatedRca({
+        component: input.incident_component || 'SystemKernel',
+        errorMessage: input.error_message || task.objective,
+        severity: input.severity || 'P1_HIGH',
+        contextDetails: input
+      });
+      deterministicContext = {
+        deterministic_sre_rca: rca
+      };
+    } else {
+      const telemetry = await SreMetricsCollector.collectTelemetrySnapshot();
+      deterministicContext = {
+        deterministic_sre_telemetry: telemetry
       };
     }
   }
