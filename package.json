@@ -1,6 +1,6 @@
 {
   "name": "ei-aios",
-  "version": "1.0.0",
+  "version": "1.6.1",
   "private": true,
   "description": "Energy Intelligence AI Operating System (EI-AIOS)",
   "workspaces": [

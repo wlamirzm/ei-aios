@@ -89,7 +89,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="pt-4 border-t border-slate-800 text-xs text-slate-400 space-y-2">
           <div className="flex items-center justify-between">
             <span>Fundador Solo</span>
-            <span className="text-emerald-400 font-mono">v1.6.0</span>
+            <span className="text-emerald-400 font-mono">v1.6.1</span>
           </div>
           <div className="text-[11px] text-slate-400">
             ANEEL REN 1.000/2021 Compliant
