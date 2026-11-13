@@ -48,7 +48,7 @@ function renderInlineFormatting(text: string): React.ReactNode {
   return parts.map((part, idx) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
-        <strong key={idx} className="font-semibold text-white">
+        <strong key={idx} className="font-semibold text-white print:text-slate-950">
           {part.slice(2, -2)}
         </strong>
       );
@@ -57,7 +57,7 @@ function renderInlineFormatting(text: string): React.ReactNode {
       return (
         <code
           key={idx}
-          className="px-1.5 py-0.5 mx-0.5 rounded bg-slate-800/90 border border-slate-700 text-emerald-300 font-mono text-[11px]"
+          className="px-1.5 py-0.5 mx-0.5 rounded bg-slate-800/90 border border-slate-700 text-emerald-300 font-mono text-[11px] print:bg-slate-100 print:border-slate-300 print:text-emerald-900"
         >
           {part.slice(1, -1)}
         </code>
@@ -65,7 +65,7 @@ function renderInlineFormatting(text: string): React.ReactNode {
     }
     if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
       return (
-        <em key={idx} className="italic text-slate-200">
+        <em key={idx} className="italic text-slate-200 print:text-slate-800">
           {part.slice(1, -1)}
         </em>
       );
@@ -104,7 +104,7 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
 
     // Linha divisória
     if (/^(-{3,}|\*{3,})$/.test(trimmed)) {
-      elements.push(<hr key={`hr-${i}`} className="border-slate-800/80 my-4" />);
+      elements.push(<hr key={`hr-${i}`} className="border-slate-800/80 my-4 print:border-slate-300" />);
       i++;
       continue;
     }
@@ -126,7 +126,7 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
         try {
           const parsed = JSON.parse(rawBlock);
           elements.push(
-            <div key={`json-card-${i}`} className="my-3">
+            <div key={`json-card-${i}`} className="my-3 print-card">
               <StructuredPayloadGrid payload={parsed} />
             </div>
           );
@@ -137,13 +137,13 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
       }
 
       elements.push(
-        <div key={`code-${i}`} className="my-3 rounded-xl overflow-hidden border border-slate-800 bg-slate-950/90">
+        <div key={`code-${i}`} className="my-3 rounded-xl overflow-hidden border border-slate-800 bg-slate-950/90 print:border-slate-300 print:bg-slate-50 print-card">
           {lang && (
-            <div className="px-3.5 py-1.5 bg-slate-900 border-b border-slate-800 text-[10px] font-mono uppercase tracking-wider text-slate-400">
+            <div className="px-3.5 py-1.5 bg-slate-900 border-b border-slate-800 text-[10px] font-mono uppercase tracking-wider text-slate-400 print:bg-slate-200 print:text-slate-800 print:border-slate-300">
               {lang}
             </div>
           )}
-          <pre className="p-3.5 text-xs font-mono text-slate-300 overflow-x-auto leading-relaxed">
+          <pre className="p-3.5 text-xs font-mono text-slate-300 overflow-x-auto leading-relaxed print:text-slate-900">
             {rawBlock}
           </pre>
         </div>
@@ -173,22 +173,22 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
           .map(parseRow);
 
         elements.push(
-          <div key={`table-${i}`} className="my-4 overflow-x-auto rounded-xl border border-slate-800 shadow-sm">
-            <table className="w-full text-left border-collapse text-xs">
+          <div key={`table-${i}`} className="my-4 overflow-x-auto rounded-xl border border-slate-800 shadow-sm print:rounded-none print:border-slate-300 print:shadow-none print-card">
+            <table className="w-full text-left border-collapse text-xs print:text-[10pt]">
               <thead>
-                <tr className="bg-slate-900/90 border-b border-slate-800 text-slate-300 uppercase text-[10px] tracking-wider">
+                <tr className="bg-slate-900/90 border-b border-slate-800 text-slate-300 uppercase text-[10px] tracking-wider print:bg-slate-100 print:text-slate-900 print:border-slate-300">
                   {headers.map((h, hIdx) => (
-                    <th key={hIdx} className="py-2.5 px-3.5 font-bold">
+                    <th key={hIdx} className="py-2.5 px-3.5 font-bold print:py-2 print:px-3 print:border-b-2 print:border-slate-400">
                       {renderInlineFormatting(h)}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60 bg-slate-950/50">
+              <tbody className="divide-y divide-slate-800/60 bg-slate-950/50 print:bg-white print:divide-slate-200">
                 {dataRows.map((row, rIdx) => (
-                  <tr key={rIdx} className="hover:bg-slate-900/40 transition">
+                  <tr key={rIdx} className="hover:bg-slate-900/40 transition print:hover:bg-transparent">
                     {row.map((cell, cIdx) => (
-                      <td key={cIdx} className="py-2.5 px-3.5 text-slate-300 leading-relaxed">
+                      <td key={cIdx} className="py-2.5 px-3.5 text-slate-300 leading-relaxed print:text-slate-800 print:py-2 print:px-3 print:border-b print:border-slate-200">
                         {renderInlineFormatting(cell)}
                       </td>
                     ))}
@@ -212,7 +212,7 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
       elements.push(
         <div
           key={`quote-${i}`}
-          className="my-3.5 p-3.5 rounded-r-xl bg-gradient-to-r from-indigo-500/10 to-slate-900/40 border-l-4 border-indigo-400 text-xs text-slate-200 leading-relaxed shadow-sm"
+          className="my-3.5 p-3.5 rounded-r-xl bg-gradient-to-r from-indigo-500/10 to-slate-900/40 border-l-4 border-indigo-400 text-xs text-slate-200 leading-relaxed shadow-sm print:bg-slate-50 print:border-indigo-600 print:text-slate-900 print:rounded-none print:my-3 print-card"
         >
           {quoteLines.map((ql, qIdx) => (
             <p key={qIdx} className={qIdx > 0 ? 'mt-1.5' : ''}>
@@ -229,9 +229,9 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
       elements.push(
         <h1
           key={`h1-${i}`}
-          className={`${compact ? 'text-sm' : 'text-base'} font-bold text-white tracking-tight mt-4 mb-2 pb-2 border-b border-slate-800 flex items-center gap-2`}
+          className={`${compact ? 'text-sm' : 'text-base'} font-bold text-white tracking-tight mt-4 mb-2 pb-2 border-b border-slate-800 flex items-center gap-2 print:text-slate-950 print:border-slate-300 print:text-base print:mt-4 print:mb-2`}
         >
-          <span className="w-1.5 h-4 rounded-full bg-emerald-400 inline-block" />
+          <span className="w-1.5 h-4 rounded-full bg-emerald-400 inline-block print:bg-emerald-600" />
           <span>{renderInlineFormatting(trimmed.slice(2))}</span>
         </h1>
       );
@@ -243,9 +243,9 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
       elements.push(
         <h2
           key={`h2-${i}`}
-          className={`${compact ? 'text-xs' : 'text-sm'} font-bold text-white tracking-wide uppercase mt-5 mb-2.5 flex items-center gap-2`}
+          className={`${compact ? 'text-xs' : 'text-sm'} font-bold text-white tracking-wide uppercase mt-5 mb-2.5 flex items-center gap-2 print:text-slate-900 print:text-sm print:mt-4 print:mb-2`}
         >
-          <span className="w-1 h-3.5 rounded-full bg-cyan-400 inline-block" />
+          <span className="w-1 h-3.5 rounded-full bg-cyan-400 inline-block print:bg-cyan-700" />
           <span>{renderInlineFormatting(trimmed.slice(3))}</span>
         </h2>
       );
@@ -258,9 +258,9 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
       elements.push(
         <h3
           key={`h3-${i}`}
-          className="text-xs font-bold text-emerald-400 mt-3.5 mb-1.5 flex items-center gap-1.5"
+          className="text-xs font-bold text-emerald-400 mt-3.5 mb-1.5 flex items-center gap-1.5 print:text-emerald-800 print:text-xs"
         >
-          <ChevronRight className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+          <ChevronRight className="w-3.5 h-3.5 text-emerald-400 shrink-0 print:text-emerald-700" />
           <span>{renderInlineFormatting(cleanHeading)}</span>
         </h3>
       );
@@ -276,10 +276,10 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
         i++;
       }
       elements.push(
-        <ul key={`ul-${i}`} className="my-2.5 space-y-2 pl-1">
+        <ul key={`ul-${i}`} className="my-2.5 space-y-2 pl-1 print-card">
           {listItems.map((item, lIdx) => (
-            <li key={lIdx} className="flex items-start gap-2.5 text-xs text-slate-300 leading-relaxed">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
+            <li key={lIdx} className="flex items-start gap-2.5 text-xs text-slate-300 leading-relaxed print:text-slate-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 shrink-0 print:bg-emerald-600" />
               <div className="flex-1">{renderInlineFormatting(item)}</div>
             </li>
           ))}
@@ -299,10 +299,10 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
         i++;
       }
       elements.push(
-        <ol key={`ol-${i}`} className="my-2.5 space-y-2 pl-1">
+        <ol key={`ol-${i}`} className="my-2.5 space-y-2 pl-1 print-card">
           {numItems.map((item, nIdx) => (
-            <li key={nIdx} className="flex items-start gap-2.5 text-xs text-slate-300 leading-relaxed">
-              <span className="w-5 h-5 rounded-md bg-slate-800 border border-slate-700 text-cyan-400 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+            <li key={nIdx} className="flex items-start gap-2.5 text-xs text-slate-300 leading-relaxed print:text-slate-800">
+              <span className="w-5 h-5 rounded-md bg-slate-800 border border-slate-700 text-cyan-400 font-mono text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5 print:bg-slate-100 print:border-slate-300 print:text-slate-900">
                 {item.num}
               </span>
               <div className="flex-1">{renderInlineFormatting(item.text)}</div>
@@ -315,7 +315,7 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
 
     // Parágrafo padrão
     elements.push(
-      <p key={`p-${i}`} className="text-xs text-slate-300 leading-relaxed my-2">
+      <p key={`p-${i}`} className="text-xs text-slate-300 leading-relaxed my-2 print:text-slate-800 print:text-[10pt] print:leading-relaxed">
         {renderInlineFormatting(trimmed)}
       </p>
     );
@@ -405,21 +405,21 @@ export function StructuredPayloadGrid({ payload }: { payload: Record<string, any
     <div className="space-y-4">
       {/* KPIs e Atributos Diretos */}
       {scalarEntries.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 print:grid-cols-3 print:gap-2.5">
           {scalarEntries.map(([key, val]) => {
             const strVal = String(val);
             const isLongText = typeof val === 'string' && strVal.length > 110;
             return (
               <div
                 key={key}
-                className={`p-3.5 rounded-xl bg-slate-900/70 border border-slate-800/90 flex flex-col justify-between ${
-                  isLongText ? 'sm:col-span-2 lg:col-span-3' : ''
+                className={`p-3.5 rounded-xl bg-slate-900/70 border border-slate-800/90 flex flex-col justify-between print:bg-slate-50 print:border-slate-300 print:text-slate-900 print:p-2.5 print:rounded-lg print-card ${
+                  isLongText ? 'sm:col-span-2 lg:col-span-3 print:col-span-3' : ''
                 }`}
               >
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 print:text-slate-600">
                   {formatFieldLabel(key)}
                 </span>
-                <div className="mt-1.5 text-xs font-semibold text-slate-100 leading-relaxed">
+                <div className="mt-1.5 text-xs font-semibold text-slate-100 leading-relaxed print:text-slate-950">
                   {isLongText ? <CorporateMarkdown content={strVal} compact /> : formatPrimitiveValue(val, key)}
                 </div>
               </div>
@@ -432,10 +432,10 @@ export function StructuredPayloadGrid({ payload }: { payload: Record<string, any
       {complexEntries.map(([key, val]) => (
         <div
           key={key}
-          className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/90 space-y-2.5"
+          className="p-4 rounded-xl bg-slate-900/50 border border-slate-800/90 space-y-2.5 print:bg-slate-50/60 print:border-slate-300 print:p-3 print-card"
         >
-          <div className="flex items-center gap-2 text-xs font-bold text-cyan-400 uppercase tracking-wider">
-            <Layers className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2 text-xs font-bold text-cyan-400 uppercase tracking-wider print:text-cyan-900">
+            <Layers className="w-3.5 h-3.5 print:text-cyan-800" />
             <span>{formatFieldLabel(key)}</span>
           </div>
 
@@ -445,22 +445,22 @@ export function StructuredPayloadGrid({ payload }: { payload: Record<string, any
                 typeof item === 'object' && item !== null ? (
                   <div
                     key={idx}
-                    className="p-3 rounded-lg bg-slate-950/80 border border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs"
+                    className="p-3 rounded-lg bg-slate-950/80 border border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs print:bg-white print:border-slate-300 print:text-slate-800"
                   >
                     {Object.entries(item).map(([subK, subV]) => (
                       <div key={subK}>
-                        <span className="text-[10px] text-slate-500 uppercase block">
+                        <span className="text-[10px] text-slate-500 uppercase block print:text-slate-600 font-semibold">
                           {formatFieldLabel(subK)}
                         </span>
-                        <span className="text-slate-200 font-medium">
+                        <span className="text-slate-200 font-medium print:text-slate-950">
                           {typeof subV === 'object' ? JSON.stringify(subV) : formatPrimitiveValue(subV, subK)}
                         </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div key={idx} className="flex items-start gap-2 text-xs text-slate-300">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div key={idx} className="flex items-start gap-2 text-xs text-slate-300 print:text-slate-800">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5 print:text-emerald-700" />
                     <span>{renderInlineFormatting(String(item))}</span>
                   </div>
                 )
@@ -471,12 +471,12 @@ export function StructuredPayloadGrid({ payload }: { payload: Record<string, any
               {Object.entries(val).map(([subK, subV]) => (
                 <div
                   key={subK}
-                  className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800/70"
+                  className="p-2.5 rounded-lg bg-slate-950/70 border border-slate-800/70 print:bg-white print:border-slate-300"
                 >
-                  <span className="text-[10px] text-slate-400 uppercase block">
+                  <span className="text-[10px] text-slate-400 uppercase block print:text-slate-600 font-semibold">
                     {formatFieldLabel(subK)}
                   </span>
-                  <span className="text-slate-200 font-semibold mt-0.5 block">
+                  <span className="text-slate-200 font-semibold mt-0.5 block print:text-slate-950">
                     {typeof subV === 'object' && subV !== null
                       ? JSON.stringify(subV)
                       : formatPrimitiveValue(subV, subK)}
@@ -557,9 +557,41 @@ export function ExecutiveDeliverableView({
     : [];
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-950/90 overflow-hidden shadow-xl">
-      {/* TIMBRE CORPORATIVO / CABEÇALHO DO DOCUMENTO */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-900/95 to-indigo-950/40 border-b border-slate-800 p-5">
+    <div className="rounded-2xl border border-slate-800 bg-slate-950/90 overflow-hidden shadow-xl print:rounded-none print:border-none print:bg-white print:shadow-none print:text-slate-900 print:overflow-visible">
+      {/* TIMBRE CORPORATIVO FORMAL DE IMPRESSÃO (EXECUTIVE PRINT HEADER - A4) */}
+      <div className="hidden print:block pb-5 mb-6 border-b-2 border-slate-900">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-300">
+          <div className="flex items-center gap-2">
+            <span className="text-xl font-black tracking-tight text-slate-950">⚡ ENERGY INTELLIGENCE</span>
+            <span className="text-xs font-mono font-semibold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2 py-0.5 rounded">EI-AIOS</span>
+          </div>
+          <div className="text-right text-[10px] text-slate-600 font-mono">
+            <div><strong>PROTOCOLO:</strong> {taskCode ? `EI-${taskCode}` : `EI-${new Date().getFullYear()}-LAUDO`}</div>
+            <div><strong>EMISSÃO:</strong> {createdAt ? new Date(createdAt).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR')}</div>
+          </div>
+        </div>
+        <div className="pt-3 flex items-start justify-between gap-4">
+          <div>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded">
+              {docTypeLabel}
+            </span>
+            <h1 className="text-xl font-bold text-slate-950 mt-2 tracking-tight">
+              {displayTitle}
+            </h1>
+            <p className="text-xs text-slate-700 mt-1 font-medium">
+              {subtitle || `${agentInfo.role} • Governança Corporativa Energy Intelligence`}
+            </p>
+          </div>
+          <div className="text-right text-xs text-slate-700 shrink-0 leading-relaxed">
+            <div><strong>Agente Autor:</strong> {agentId} — {agentInfo.name}</div>
+            <div><strong>Versão:</strong> v{version} (Auditado QA Gate)</div>
+            <div><strong>Regulação:</strong> REN ANEEL 1.000/2021</div>
+          </div>
+        </div>
+      </div>
+
+      {/* TIMBRE CORPORATIVO / CABEÇALHO DO DOCUMENTO (TELA INTERATIVA) */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-900/95 to-indigo-950/40 border-b border-slate-800 p-5 print:hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
@@ -606,17 +638,17 @@ export function ExecutiveDeliverableView({
       </div>
 
       {/* CORPO DO ENTREGÁVEL */}
-      <div className="p-5 space-y-5 max-h-[600px] overflow-y-auto">
+      <div className="p-5 space-y-5 max-h-[600px] overflow-y-auto print:max-h-none print:overflow-visible print:p-0 print:space-y-6">
         {showRawJson ? (
-          <pre className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap">
+          <pre className="p-4 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap print:bg-slate-50 print:border-slate-300 print:text-slate-900">
             {JSON.stringify({ structuredData: payload, qaReview }, null, 2)}
           </pre>
         ) : (
           <>
             {/* SEÇÃO 1: DOCUMENTO EXECUTIVO FORMATADO */}
             {primaryMarkdown && (
-              <div className="p-5 rounded-xl bg-slate-900/40 border border-slate-800/80">
-                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-emerald-400 mb-3 pb-2 border-b border-slate-800/80">
+              <div className="p-5 rounded-xl bg-slate-900/40 border border-slate-800/80 print:bg-white print:border-none print:p-0 print:text-slate-900">
+                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-emerald-400 mb-3 pb-2 border-b border-slate-800/80 print:text-emerald-800 print:border-slate-300">
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Parecer & Especificação Executiva</span>
                 </div>
@@ -626,22 +658,24 @@ export function ExecutiveDeliverableView({
 
             {/* SEÇÃO 2: INDICADORES E DADOS ESTRUTURADOS */}
             {Object.keys(payload).length > 0 && (
-              <StructuredPayloadGrid payload={payload} />
+              <div className="print-card">
+                <StructuredPayloadGrid payload={payload} />
+              </div>
             )}
 
             {/* SEÇÃO 3: PREMISSAS & RESSALVAS REGULATÓRIAS */}
             {(assumptions.length > 0 || limitations.length > 0) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2 print:gap-4 print-card">
                 {assumptions.length > 0 && (
-                  <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-                    <div className="flex items-center gap-2 text-xs font-bold text-indigo-400 uppercase tracking-wider">
+                  <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2 print:bg-slate-50/80 print:border-slate-300 print:text-slate-900">
+                    <div className="flex items-center gap-2 text-xs font-bold text-indigo-400 uppercase tracking-wider print:text-indigo-900">
                       <FileCheck2 className="w-3.5 h-3.5" />
                       <span>Premissas Técnicas Adotadas</span>
                     </div>
                     <ul className="space-y-1.5">
                       {assumptions.map((item, idx) => (
-                        <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                        <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed print:text-slate-800">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5 print:text-indigo-700" />
                           <span>{renderInlineFormatting(String(item))}</span>
                         </li>
                       ))}
@@ -650,15 +684,15 @@ export function ExecutiveDeliverableView({
                 )}
 
                 {limitations.length > 0 && (
-                  <div className="p-4 rounded-xl bg-amber-950/15 border border-amber-500/20 space-y-2">
-                    <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  <div className="p-4 rounded-xl bg-amber-950/15 border border-amber-500/20 space-y-2 print:bg-amber-50/80 print:border-amber-300 print:text-slate-900">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider print:text-amber-900">
                       <AlertTriangle className="w-3.5 h-3.5" />
                       <span>Ressalvas & Conformidade Regulatória</span>
                     </div>
                     <ul className="space-y-1.5">
                       {limitations.map((item, idx) => (
-                        <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5" />
+                        <li key={idx} className="text-xs text-slate-300 flex items-start gap-2 leading-relaxed print:text-slate-800">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1.5 print:bg-amber-600" />
                           <span>{renderInlineFormatting(String(item))}</span>
                         </li>
                       ))}
@@ -670,20 +704,20 @@ export function ExecutiveDeliverableView({
 
             {/* SEÇÃO 4: SELO DE AUDITORIA QA GATE (AG-008) SE PRESENTE */}
             {qaReview && (
-              <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/30 to-slate-900 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-950/30 to-slate-900 border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:bg-emerald-50/70 print:border-emerald-300 print:text-slate-900 print-card">
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
-                    <ShieldCheck className="w-4 h-4" />
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400 print:text-emerald-900">
+                    <ShieldCheck className="w-4 h-4 print:text-emerald-700" />
                     <span>Certificação de Qualidade & Risco (AG-008 QA Gate)</span>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">
+                  <p className="text-xs text-slate-300 leading-relaxed print:text-slate-800">
                     {qaReview.audit_verdict ||
                       'Entregável auditado e em conformidade com a REN ANEEL 1.000/2021 e diretrizes de governança.'}
                   </p>
                 </div>
-                <div className="px-3.5 py-2 rounded-xl bg-slate-950 border border-emerald-500/30 text-center shrink-0">
-                  <span className="text-[10px] text-slate-400 uppercase block">Score QA</span>
-                  <span className="text-sm font-mono font-bold text-emerald-400 flex items-center gap-1">
+                <div className="px-3.5 py-2 rounded-xl bg-slate-950 border border-emerald-500/30 text-center shrink-0 print:bg-white print:border-emerald-300">
+                  <span className="text-[10px] text-slate-400 uppercase block print:text-slate-600">Score QA</span>
+                  <span className="text-sm font-mono font-bold text-emerald-400 flex items-center gap-1 print:text-emerald-800">
                     <TrendingUp className="w-3.5 h-3.5" />
                     {qaReview.confidence_score
                       ? `${(Number(qaReview.confidence_score) * 100).toFixed(0)}%`
@@ -696,10 +730,21 @@ export function ExecutiveDeliverableView({
         )}
       </div>
 
-      {/* RODAPÉ CORPORATIVO */}
-      <div className="px-5 py-3 bg-slate-900/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
+      {/* RODAPÉ CORPORATIVO DE TELA */}
+      <div className="px-5 py-3 bg-slate-900/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 print:hidden">
         <span>Energy Intelligence AIOS • Governança Corporativa & Compliance ANEEL</span>
         <span>Versão {version} • Documento Auditado pelo AG-008</span>
+      </div>
+
+      {/* RODAPÉ FORMAL DE IMPRESSÃO CORPORATIVA (EXECUTIVE PRINT FOOTER) */}
+      <div className="hidden print:block pt-5 mt-8 border-t-2 border-slate-300 text-[9pt] text-slate-600 space-y-1.5 print-card">
+        <div className="flex items-center justify-between font-semibold text-slate-800">
+          <span>EI-AIOS • Energy Intelligence AI Operating System</span>
+          <span>Conformidade Regulatória: REN ANEEL 1.000/2021 & Lei 14.300/2022</span>
+        </div>
+        <p className="text-[8pt] text-slate-500 leading-normal">
+          <strong>Aviso Legal & Rastreabilidade:</strong> Este laudo executivo foi emitido e auditado matematicamente pelo AG-008 (QA Gate) sob parâmetros regulatórios da ANEEL. As análises e recomendações aqui presentes têm caráter consultivo e estratégico para subsidiar tomada de decisão executiva.
+        </p>
       </div>
     </div>
   );

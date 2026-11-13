@@ -57,9 +57,9 @@ export default function ArtifactsPage() {
   });
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12 print:max-w-none print:p-0 print:m-0 print:space-y-0">
       {/* HEADER */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-3 print:hidden">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <FileText className="w-6 h-6 text-indigo-400" />
@@ -109,7 +109,7 @@ export default function ArtifactsPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* LISTA LATERAL DE DOCUMENTOS */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 h-fit">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3 h-fit print:hidden">
             <div className="flex items-center gap-2 pb-2 border-b border-slate-800">
               <Search className="w-4 h-4 text-slate-500" />
               <input
@@ -162,7 +162,7 @@ export default function ArtifactsPage() {
 
           {/* VISUALIZADOR CORPORATIVO DE ENTREGÁVEL */}
           {selectedArtifact && (
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-2 print:col-span-3 print:w-full print:block">
               <ExecutiveDeliverableView
                 title={selectedArtifact.title}
                 subtitle={selectedArtifact.summary}

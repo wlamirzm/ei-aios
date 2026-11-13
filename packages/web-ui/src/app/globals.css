@@ -25,3 +25,45 @@ body {
   background: #334155;
 }
 
+/* ==============================================================================
+   ESTILO PROFISSIONAL PARA EXPORTAÇÃO EM PDF / IMPRESSÃO A4 (EXECUTIVE PRINT)
+   ============================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm 15mm 15mm;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+    font-size: 10.5pt !important;
+    line-height: 1.5 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Oculta scrollbars e elementos de navegação */
+  ::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* Prevenção de quebra de página inadequada */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    color: #0f172a !important;
+  }
+
+  p, table, tr, blockquote, pre, .print-card {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Ajuste de contraste para modo claro no papel */
+  .dark {
+    color-scheme: light !important;
+  }
+}
+

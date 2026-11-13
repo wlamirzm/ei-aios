@@ -15,9 +15,9 @@ import {
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="dark bg-slate-950 text-slate-100 min-h-screen flex">
+    <div className="dark bg-slate-950 text-slate-100 min-h-screen flex print:bg-white print:text-slate-900 print:block">
       {/* SIDEBAR FIXA DE NAVEGAÇÃO */}
-      <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 sticky top-0 h-screen z-50">
+      <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between p-4 sticky top-0 h-screen z-50 print:hidden">
         <div>
           {/* Logo & Header */}
           <div className="flex items-center gap-3 px-2 py-4 mb-4 border-b border-slate-800">
@@ -98,8 +98,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* ÁREA PRINCIPAL COM TOPBAR GLOBAL */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex items-center justify-between px-6 sticky top-0 z-40">
+      <div className="flex-1 flex flex-col min-w-0 print:block">
+        <header className="h-16 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex items-center justify-between px-6 sticky top-0 z-40 print:hidden">
           {/* Indicador luminoso Autonomous Worker */}
           <div className="flex items-center gap-3">
             <span className="relative flex h-2.5 w-2.5">
@@ -136,7 +136,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
 
-        <main className="flex-1 p-6 overflow-y-auto">
+        <main className="flex-1 p-6 overflow-y-auto print:p-0 print:m-0 print:overflow-visible">
           {children}
         </main>
       </div>
