@@ -159,6 +159,56 @@ export default function AgentsPage() {
       daily_budget: 6.00,
       enabled: true,
       system_prompt: 'Você é o Agente de Inteligência de E-mails e Próximo Passo Executivo (AG-012) da Energy Intelligence...'
+    },
+    {
+      id: 'AG-013',
+      name: 'Legal & Compliance Agent',
+      role: 'Contratos, termos de uso, LGPD, estrutura societária, propriedade intelectual e compliance.',
+      model: 'gemini-2.5-pro',
+      temperature: 0.1,
+      daily_budget: 8.00,
+      enabled: true,
+      system_prompt: 'Você é o Especialista Jurídico e de Compliance (AG-013) da Energy Intelligence...'
+    },
+    {
+      id: 'AG-014',
+      name: 'Product & Ops Agent',
+      role: 'Product management, roadmap, discovery, playbooks operacionais, processos e métricas de produto.',
+      model: 'gemini-2.5-flash',
+      temperature: 0.3,
+      daily_budget: 5.00,
+      enabled: true,
+      system_prompt: 'Você é o Gerente de Produto e Operações (AG-014) da Energy Intelligence...'
+    },
+    {
+      id: 'AG-015',
+      name: 'Executive Presentation & Pitch Deck Agent',
+      role: 'Apresentações executivas C-Level, pitch decks para investidores e propostas comerciais visuais em Marp Markdown 16:9.',
+      model: 'gemini-2.5-flash',
+      temperature: 0.3,
+      daily_budget: 6.00,
+      enabled: true,
+      system_prompt: 'Você é o Especialista em Apresentações Executivas e Pitch Decks (AG-015) da Energy Intelligence. Sua missão é estruturar lâminas executivas de alto impacto para C-Level e investidores...'
+    },
+    {
+      id: 'AG-016',
+      name: 'Telegram Mobile Concierge & HITL Gateway',
+      role: 'Interface mobile no Telegram: aprovações HITL Nível 2 por botões inline, alertas críticos, consulta de KPIs e despacho de objetivos por voz/texto.',
+      model: 'gemini-2.5-flash',
+      temperature: 0.2,
+      daily_budget: 5.00,
+      enabled: true,
+      system_prompt: 'Você é o Concierge Executivo Mobile e Gateway HITL via Telegram (AG-016) da Energy Intelligence. Sua responsabilidade é servir como interface móvel do fundador...'
+    },
+    {
+      id: 'AG-017',
+      name: 'SRE & Cloud Observability Agent',
+      role: 'Monitoramento de telemetria VPS/Docker, latência Supabase, consumo de tokens LLM e RCA automático com alertas P0/P1.',
+      model: 'gemini-2.5-flash',
+      temperature: 0.0,
+      daily_budget: 4.00,
+      enabled: true,
+      system_prompt: 'Você é o Engenheiro de Confiabilidade de Sites e Observabilidade Cloud (AG-017) da Energy Intelligence. Sua missão é monitorar telemetria e integridade dos serviços...'
     }
   ]);
 
@@ -239,7 +289,7 @@ export default function AgentsPage() {
   };
 
   const handleCleanDatabase = async () => {
-    if (!confirm('Deseja realmente limpar a base de dados? Todas as tarefas, faturas e clientes de teste serão excluídos. Os 11 agentes e tabelas regulatórias da ANEEL serão preservados.')) {
+    if (!confirm('Deseja realmente limpar a base de dados? Todas as tarefas, faturas e clientes de teste serão excluídos. Os 17 agentes e tabelas regulatórias da ANEEL serão preservados.')) {
       return;
     }
     setCleaning(true);
@@ -311,7 +361,7 @@ export default function AgentsPage() {
             Catálogo de Agentes & Governança de Prompts
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Converse diretamente com cada um dos 11 agentes autônomos ou ajuste seus system prompts e modelos de IA.
+            Converse diretamente com cada um dos 17 agentes autônomos ou ajuste seus system prompts e modelos de IA.
           </p>
         </div>
 
