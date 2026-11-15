@@ -341,11 +341,18 @@ export default function ArtifactsPage() {
                 <span>{copiedMaster ? 'Copiado!' : 'Copiar Master'}</span>
               </button>
               <button
-                onClick={handleDownloadMasterReport}
+                onClick={() => window.print()}
                 className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md"
               >
                 <Download className="w-3.5 h-3.5" />
-                <span>Baixar Relatório Master (.md)</span>
+                <span>Exportar PDF Master</span>
+              </button>
+              <button
+                onClick={handleDownloadMasterReport}
+                className="bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Baixar .md</span>
               </button>
             </>
           ) : (
@@ -656,11 +663,18 @@ export default function ArtifactsPage() {
                         <span>{copiedMaster ? 'Copiado!' : 'Copiar Master (.md)'}</span>
                       </button>
                       <button
-                        onClick={handleDownloadMasterReport}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md"
+                        onClick={() => window.print()}
+                        className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md"
                       >
                         <Download className="w-3.5 h-3.5" />
-                        <span>Baixar Master (.md)</span>
+                        <span>Exportar PDF Master</span>
+                      </button>
+                      <button
+                        onClick={handleDownloadMasterReport}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Baixar .md</span>
                       </button>
                     </div>
                   </div>

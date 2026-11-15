@@ -61,6 +61,60 @@ body {
     break-inside: avoid !important;
   }
 
+  /* Garante espaçamento e contraste nobre para seções de relatório master */
+  h1 {
+    font-size: 18pt !important;
+    line-height: 1.3 !important;
+    margin-bottom: 8pt !important;
+  }
+
+  h2 {
+    font-size: 14pt !important;
+    line-height: 1.35 !important;
+    margin-top: 14pt !important;
+    margin-bottom: 6pt !important;
+    border-bottom: 1.5pt solid #cbd5e1 !important;
+    padding-bottom: 4pt !important;
+  }
+
+  h3 {
+    font-size: 12pt !important;
+    margin-top: 10pt !important;
+    margin-bottom: 4pt !important;
+    color: #1e293b !important;
+  }
+
+  /* Tabelas corporativas no papel */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 8pt 0 !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    border: 1pt solid #cbd5e1 !important;
+    padding: 4pt 6pt !important;
+    font-weight: 700 !important;
+  }
+
+  td {
+    border: 1pt solid #e2e8f0 !important;
+    padding: 4pt 6pt !important;
+    color: #1e293b !important;
+  }
+
+  blockquote {
+    border-left: 3pt solid #6366f1 !important;
+    padding-left: 10pt !important;
+    margin: 8pt 0 !important;
+    color: #334155 !important;
+    background-color: #f8fafc !important;
+    padding-top: 4pt !important;
+    padding-bottom: 4pt !important;
+  }
+
   /* Ajuste de contraste para modo claro no papel */
   .dark {
     color-scheme: light !important;
