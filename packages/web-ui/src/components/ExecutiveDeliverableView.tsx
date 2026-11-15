@@ -28,7 +28,12 @@ const AGENT_LABELS: Record<string, { name: string; role: string; accent: string 
   'AG-009': { name: 'ANEEL Regulatory Specialist', role: 'Regulação Setorial & REN ANEEL 1.000/2021', accent: 'text-teal-400 border-teal-500/30 bg-teal-500/10' },
   'AG-010': { name: 'Customer Success & M&V', role: 'Medição e Verificação (EVO/IPMVP)', accent: 'text-lime-400 border-lime-500/30 bg-lime-500/10' },
   'AG-011': { name: 'Startup CFO & Unit Economics', role: 'Finanças Corporativas, Pricing & FinOps', accent: 'text-yellow-400 border-yellow-500/30 bg-yellow-500/10' },
-  'AG-012': { name: 'Email & Next-Step Intelligence', role: 'Triagem Executiva & Automação de Próximo Passo', accent: 'text-violet-400 border-violet-500/30 bg-violet-500/10' }
+  'AG-012': { name: 'Email & Next-Step Intelligence', role: 'Triagem Executiva & Automação de Próximo Passo', accent: 'text-violet-400 border-violet-500/30 bg-violet-500/10' },
+  'AG-013': { name: 'Legal & Compliance Agent', role: 'Jurídico, Contratos, LGPD & Compliance', accent: 'text-blue-400 border-blue-500/30 bg-blue-500/10' },
+  'AG-014': { name: 'Product & Ops Agent', role: 'Roadmap, Processos Operacionais & Métricas', accent: 'text-orange-400 border-orange-500/30 bg-orange-500/10' },
+  'AG-015': { name: 'Executive Presentation & Pitch Deck', role: 'Storytelling Executivo & Decks C-Level', accent: 'text-fuchsia-400 border-fuchsia-500/30 bg-fuchsia-500/10' },
+  'AG-016': { name: 'Telegram Mobile Concierge & HITL', role: 'Interface Mobile do Fundador & Gateway HITL', accent: 'text-sky-400 border-sky-500/30 bg-sky-500/10' },
+  'AG-017': { name: 'SRE & Cloud Observability Agent', role: 'Confiabilidade, Telemetria VPS & Incidentes', accent: 'text-red-400 border-red-500/30 bg-red-500/10' }
 };
 
 const ARTIFACT_TYPE_LABELS: Record<string, string> = {
