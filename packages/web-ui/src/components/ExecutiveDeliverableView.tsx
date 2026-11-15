@@ -49,7 +49,9 @@ const ARTIFACT_TYPE_LABELS: Record<string, string> = {
  */
 function renderInlineFormatting(text: string): React.ReactNode {
   if (!text) return null;
-  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g);
+  // Sanitiza qualquer tag HTML residual para evitar que apareçam códigos como <span ...> ou <div> no texto
+  const sanitized = text.replace(/<[^>]+>/g, '');
+  const parts = sanitized.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g);
   return parts.map((part, idx) => {
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
@@ -86,12 +88,20 @@ export function CorporateMarkdown({ content, compact = false }: { content: strin
   if (!content) return null;
 
   // Remove blocos finais de JSON bruto que antes eram concatenados automaticamente no markdown
-  const cleanedContent = content
+  let cleanedContent = content
     .replace(/---\s*### Dados Estruturados \(JSON\)[\s\S]*$/i, '')
     .replace(/```json[\s\S]*?```/g, (match) => {
       // Se o documento inteiro for apenas um bloco JSON, converte-o para seções legíveis
       return match;
-    })
+    });
+
+  // Limpa blocos de apresentação Marp (frontmatter YAML e tags de slides) e converte tags HTML de slides para Markdown corporativo limpo
+  cleanedContent = cleanedContent
+    .replace(/^---\s*[\r\n]+marp:\s*true[\s\S]*?[\r\n]+---\s*[\r\n]+/gm, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<span[^>]*>([\s\S]*?)<\/span>/gi, '**$1**')
+    .replace(/<div[^>]*kpi-number[^>]*>([\s\S]*?)<\/div>/gi, '\n### 💎 $1\n')
+    .replace(/<div[^>]*>([\s\S]*?)<\/div>/gi, '\n$1\n')
     .trim();
 
   const lines = cleanedContent.split('\n');

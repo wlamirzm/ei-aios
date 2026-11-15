@@ -211,8 +211,18 @@ export default function ArtifactsPage() {
       md += `\n`;
 
       if (artifact?.content_markdown) {
+        // Sanitiza apresentações Marp ou fragmentos HTML brutos para o formato puro de relatório master executivo
+        const cleanArtContent = artifact.content_markdown
+          .replace(/^---\s*[\r\n]+marp:\s*true[\s\S]*?[\r\n]+---\s*[\r\n]+/gm, '')
+          .replace(/<!--[\s\S]*?-->/g, '')
+          .replace(/<span[^>]*>([\s\S]*?)<\/span>/gi, '**$1**')
+          .replace(/<div[^>]*kpi-number[^>]*>([\s\S]*?)<\/div>/gi, '\n> ### 💎 $1\n')
+          .replace(/<div[^>]*>([\s\S]*?)<\/div>/gi, '\n$1\n')
+          .replace(/<[^>]+>/g, '')
+          .trim();
+
         md += `#### Entregável / Laudo Técnico Gerado:\n\n`;
-        md += `${artifact.content_markdown}\n\n`;
+        md += `${cleanArtContent}\n\n`;
       } else if (task.result_payload) {
         md += `#### Dados Estruturados & Conclusão Técnica:\n\n`;
         if (task.result_payload.executive_summary_markdown) {
