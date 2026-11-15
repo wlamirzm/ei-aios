@@ -683,13 +683,16 @@ apiRouter.get('/api/v1/tasks', async (_req: Request, res: Response, next: NextFu
 // ------------------------------------------------------------------------------
 // 11. GET /api/v1/approvals (Listagem de Aprovações Nível 2 Pendentes e Histórico)
 // ------------------------------------------------------------------------------
-apiRouter.get('/api/v1/approvals', async (_req: Request, res: Response, next: NextFunction) => {
+apiRouter.get('/api/v1/approvals', async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const limitQuery = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+    const limit = isNaN(limitQuery) ? 50 : Math.min(Math.max(limitQuery, 5), 100);
+
     const { data, error } = await supabase
       .from('approvals')
       .select('*, task:tasks(*)')
       .order('created_at', { ascending: false })
-      .limit(30);
+      .limit(limit);
 
     if (error) {
       res.status(500).json({ error: error.message });

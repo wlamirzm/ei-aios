@@ -192,8 +192,9 @@ export async function fetchTasks() {
   return res.json();
 }
 
-export async function fetchApprovals() {
-  const res = await fetch(`${getBaseUrl()}/api/v1/approvals`, {
+export async function fetchApprovals(limit?: number) {
+  const url = limit ? `${getBaseUrl()}/api/v1/approvals?limit=${limit}` : `${getBaseUrl()}/api/v1/approvals`;
+  const res = await fetch(url, {
     cache: 'no-store',
     headers: getAuthHeaders(false)
   });
