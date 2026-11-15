@@ -262,10 +262,19 @@ export default function EmailsPage() {
 
   // Abre a tela oficial do Gmail Web com destinatário, assunto e corpo já preenchidos (1 clique)
   const openGmailWebCompose = (to: string, subject: string, body: string) => {
+    if (!to.trim()) {
+      setFeedback({ text: 'Por favor, informe o destinatário (Para) antes de enviar.', isError: true });
+      return;
+    }
     const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(
       subject
     )}&body=${encodeURIComponent(body)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
+    setIsSendModalOpen(false);
+    setFeedback({
+      text: `Tela de envio do Gmail aberta com sucesso em nova aba para ${to.trim()}! O e-mail está pronto para disparo.`,
+      isError: false
+    });
   };
 
   // Abre o modal de envio com a minuta sugerida pelo AG-012
@@ -289,7 +298,19 @@ export default function EmailsPage() {
   // Disparo direto via servidor SMTP (Gmail / HostGator)
   const handleSendViaSmtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!sendTo.trim() || !sendSubject.trim() || !sendBody.trim() || isSendingEmail) return;
+    if (!sendTo.trim()) {
+      setFeedback({ text: 'Por favor, informe o destinatário (Para).', isError: true });
+      return;
+    }
+    if (!sendSubject.trim()) {
+      setFeedback({ text: 'Por favor, informe o assunto da mensagem.', isError: true });
+      return;
+    }
+    if (!sendBody.trim()) {
+      setFeedback({ text: 'Por favor, informe o corpo da mensagem.', isError: true });
+      return;
+    }
+    if (isSendingEmail) return;
 
     setIsSendingEmail(true);
     setFeedback(null);
@@ -303,11 +324,13 @@ export default function EmailsPage() {
 
       setIsSendModalOpen(false);
       setFeedback({
-        text: `E-mail enviado com sucesso via SMTP! ID da mensagem: ${res.messageId || 'OK'} (${res.sentFrom || 'Enviado'}).`
+        text: `E-mail enviado com sucesso via SMTP! ID da mensagem: ${res.messageId || 'OK'} (${res.sentFrom || 'Enviado'}).`,
+        isError: false
       });
     } catch (err: any) {
+      setIsSendModalOpen(false);
       setFeedback({
-        text: `Erro no disparo SMTP: ${err.message || 'Falha ao autenticar no servidor de e-mail.'}`,
+        text: `Falha no envio do e-mail: ${err.message || 'Erro ao autenticar no servidor de e-mail.'}`,
         isError: true
       });
     } finally {
@@ -412,6 +435,36 @@ export default function EmailsPage() {
             </div>
             <div className="text-[10px] text-slate-500 font-mono">Prontas p/ Envio</div>
           </div>
+        </div>
+      )}
+
+      {/* NOTIFICAÇÃO FLUTUANTE (TOAST) DE STATUS DE ENVIO */}
+      {feedback && (
+        <div
+          className={`fixed top-5 right-5 z-[80] max-w-md w-[calc(100vw-40px)] sm:w-full p-4 rounded-2xl border shadow-2xl flex items-start gap-3 backdrop-blur-md animate-in slide-in-from-top-4 duration-200 ${
+            feedback.isError
+              ? 'bg-rose-950/95 border-rose-500/60 text-rose-200 shadow-rose-950/50'
+              : 'bg-emerald-950/95 border-emerald-500/60 text-emerald-200 shadow-emerald-950/50'
+          }`}
+        >
+          {feedback.isError ? (
+            <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" />
+          )}
+          <div className="flex-1 text-xs font-mono leading-relaxed">
+            <span className="font-bold block text-white text-sm mb-1">
+              {feedback.isError ? 'Falha no Envio de E-mail' : 'Confirmação de Envio'}
+            </span>
+            <span>{feedback.text}</span>
+          </div>
+          <button
+            onClick={() => setFeedback(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+            title="Fechar"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
 
