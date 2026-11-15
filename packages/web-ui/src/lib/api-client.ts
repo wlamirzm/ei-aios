@@ -240,6 +240,7 @@ export async function createEmailAccount(payload: {
   account_label: string;
   email_address: string;
   password: string;
+  provider?: string;
   imap_host?: string;
   imap_port?: number;
   smtp_host?: string;
@@ -324,6 +325,27 @@ export async function executeEmailNextStep(messageId: string) {
   });
   if (!res.ok) throw new Error('Falha ao disparar próximo passo');
   return res.json();
+}
+
+export async function sendEmailMessage(payload: {
+  accountId?: string;
+  to: string;
+  subject: string;
+  text: string;
+  html?: string;
+  customUser?: string;
+  customPass?: string;
+  customHost?: string;
+  customPort?: number;
+}) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/emails/send`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao enviar e-mail');
+  return data;
 }
 
 // ---------------------------------------------------------------------------

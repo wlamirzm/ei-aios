@@ -17,7 +17,10 @@ import {
   Server,
   Play,
   Inbox,
-  ArrowRight
+  ArrowRight,
+  ExternalLink,
+  X,
+  Globe
 } from 'lucide-react';
 import {
   fetchEmailAccounts,
@@ -27,7 +30,8 @@ import {
   syncEmailAccount,
   simulateIncomingEmail,
   fetchEmailMessages,
-  executeEmailNextStep
+  executeEmailNextStep,
+  sendEmailMessage
 } from '@/lib/api-client';
 
 export default function EmailsPage() {
@@ -36,7 +40,8 @@ export default function EmailsPage() {
   const [operationalMetrics, setOperationalMetrics] = useState<any | null>(null);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
-  // Form states for new account
+  // Provider: hostgator_cpanel ou gmail
+  const [accountProvider, setAccountProvider] = useState<'hostgator_cpanel' | 'gmail'>('hostgator_cpanel');
   const [accountLabel, setAccountLabel] = useState('');
   const [emailAddress, setEmailAddress] = useState('');
   const [password, setPassword] = useState('');
@@ -53,6 +58,14 @@ export default function EmailsPage() {
   const [busyMessageId, setBusyMessageId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  // Estado do Modal de Envio de E-mail via Gmail / SMTP
+  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
+  const [sendAccountId, setSendAccountId] = useState<string>('');
+  const [sendTo, setSendTo] = useState<string>('');
+  const [sendSubject, setSendSubject] = useState<string>('');
+  const [sendBody, setSendBody] = useState<string>('');
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -74,14 +87,41 @@ export default function EmailsPage() {
     return () => clearInterval(timer);
   }, [loadData]);
 
-  // Auto-preenche mail.seudominio.com.br (padrão cPanel HostGator) ao digitar o e-mail
+  // Altera os hosts automaticamente de acordo com o provedor selecionado
+  const handleProviderChange = (newProvider: 'hostgator_cpanel' | 'gmail') => {
+    setAccountProvider(newProvider);
+    if (newProvider === 'gmail') {
+      setImapHost('imap.gmail.com');
+      setImapPort(993);
+      setSmtpHost('smtp.gmail.com');
+      setSmtpPort(465);
+    } else {
+      const parts = emailAddress.trim().split('@');
+      const domain = parts[1] ? parts[1].toLowerCase() : 'seudominio.com.br';
+      setImapHost(`mail.${domain}`);
+      setImapPort(993);
+      setSmtpHost(`mail.${domain}`);
+      setSmtpPort(465);
+    }
+  };
+
+  // Auto-detecta Gmail ou host cPanel ao digitar o e-mail
   const handleEmailChange = (val: string) => {
     setEmailAddress(val);
-    const parts = val.trim().split('@');
-    if (parts.length === 2 && parts[1]) {
-      const autoHost = `mail.${parts[1].toLowerCase()}`;
-      setImapHost(autoHost);
-      setSmtpHost(autoHost);
+    const lower = val.trim().toLowerCase();
+    if (lower.includes('@gmail.com') || lower.includes('@googlemail.com')) {
+      setAccountProvider('gmail');
+      setImapHost('imap.gmail.com');
+      setImapPort(993);
+      setSmtpHost('smtp.gmail.com');
+      setSmtpPort(465);
+    } else if (accountProvider === 'hostgator_cpanel') {
+      const parts = lower.split('@');
+      if (parts.length === 2 && parts[1]) {
+        const autoHost = `mail.${parts[1]}`;
+        setImapHost(autoHost);
+        setSmtpHost(autoHost);
+      }
     }
   };
 
@@ -96,9 +136,10 @@ export default function EmailsPage() {
         account_label: accountLabel.trim() || emailAddress.trim(),
         email_address: emailAddress.trim(),
         password,
-        imap_host: imapHost.trim() || undefined,
+        provider: accountProvider,
+        imap_host: imapHost.trim() || (accountProvider === 'gmail' ? 'imap.gmail.com' : undefined),
         imap_port: Number(imapPort) || 993,
-        smtp_host: smtpHost.trim() || undefined,
+        smtp_host: smtpHost.trim() || (accountProvider === 'gmail' ? 'smtp.gmail.com' : undefined),
         smtp_port: Number(smtpPort) || 465,
         operation_mode: operationMode
       });
@@ -109,7 +150,7 @@ export default function EmailsPage() {
       setImapHost('');
       setSmtpHost('');
       setFeedback({
-        text: 'Conta de e-mail HostGator cPanel cadastrada com sucesso! Você já pode sincronizar via IMAP ou simular um e-mail na linha da conta.'
+        text: `Conta de e-mail (${accountProvider === 'gmail' ? 'Gmail' : 'HostGator cPanel'}) cadastrada com sucesso!`
       });
       await loadData();
     } catch (err: any) {
@@ -155,7 +196,7 @@ export default function EmailsPage() {
       });
       await loadData();
     } catch (err: any) {
-      setFeedback({ text: `IMAP HostGator: ${err.message}`, isError: true });
+      setFeedback({ text: `IMAP: ${err.message}`, isError: true });
       await loadData();
     } finally {
       setBusyAccountId(null);
@@ -219,38 +260,105 @@ export default function EmailsPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Abre a tela oficial do Gmail Web com destinatário, assunto e corpo já preenchidos (1 clique)
+  const openGmailWebCompose = (to: string, subject: string, body: string) => {
+    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(
+      subject
+    )}&body=${encodeURIComponent(body)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  // Abre o modal de envio com a minuta sugerida pelo AG-012
+  const handleOpenSendModalForMessage = (msg: any) => {
+    setSendAccountId(msg.account_id || '');
+    setSendTo(msg.from_address || '');
+    setSendSubject(msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject || ''}`);
+    setSendBody(msg.suggested_reply_draft || '');
+    setIsSendModalOpen(true);
+  };
+
+  // Abre o modal para compor novo e-mail
+  const handleOpenComposeModal = () => {
+    setSendAccountId(accounts[0]?.id || '');
+    setSendTo('');
+    setSendSubject('');
+    setSendBody('');
+    setIsSendModalOpen(true);
+  };
+
+  // Disparo direto via servidor SMTP (Gmail / HostGator)
+  const handleSendViaSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sendTo.trim() || !sendSubject.trim() || !sendBody.trim() || isSendingEmail) return;
+
+    setIsSendingEmail(true);
+    setFeedback(null);
+    try {
+      const res = await sendEmailMessage({
+        accountId: sendAccountId || undefined,
+        to: sendTo.trim(),
+        subject: sendSubject.trim(),
+        text: sendBody.trim()
+      });
+
+      setIsSendModalOpen(false);
+      setFeedback({
+        text: `E-mail enviado com sucesso via SMTP! ID da mensagem: ${res.messageId || 'OK'} (${res.sentFrom || 'Enviado'}).`
+      });
+    } catch (err: any) {
+      setFeedback({
+        text: `Erro no disparo SMTP: ${err.message || 'Falha ao autenticar no servidor de e-mail.'}`,
+        isError: true
+      });
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-12">
+    <div className="space-y-8 max-w-7xl mx-auto pb-16">
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <Mail className="w-6 h-6 text-sky-400" />
             <h1 className="text-2xl font-bold text-white">
-              Central de E-mails HostGator cPanel & Governança AG-012
+              Central de E-mails & Governança AG-012 (HostGator cPanel & Gmail)
             </h1>
             <span className="bg-sky-500/10 text-sky-400 border border-sky-500/30 text-xs font-mono font-bold px-2.5 py-0.5 rounded">
               AG-012 ONLINE
             </span>
+            <span className="bg-red-500/10 text-red-400 border border-red-500/30 text-xs font-mono font-bold px-2.5 py-0.5 rounded flex items-center gap-1">
+              <Send className="w-3 h-3" /> GMAIL READY
+            </span>
           </div>
           <p className="text-slate-400 text-sm mt-1">
-            Cadastre múltiplas contas de e-mail cPanel da HostGator (IMAP SSL 993 / SMTP SSL 465) e escolha em cada linha entre{' '}
-            <strong className="text-slate-200">Somente Monitorar</strong>,{' '}
-            <strong className="text-amber-400">Ação Assistida</strong> ou{' '}
-            <strong className="text-emerald-400">Ação Automática</strong>.
+            Conecte suas contas de e-mail corporativas (<strong>HostGator cPanel</strong> ou <strong>Gmail</strong>),
+            leia mensagens via IMAP SSL e envie respostas diretamente pelo <strong>Gmail (1-clique)</strong> ou via <strong>SMTP</strong> sob a governança do <strong>AG-012</strong>.
           </p>
         </div>
 
-        <button
-          onClick={loadData}
-          className="bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition self-start"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Atualizar Caixa ({messages.length})</span>
-        </button>
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* BOTÃO PRINCIPAL DE ENVIO DE E-MAIL VIA GMAIL */}
+          <button
+            onClick={handleOpenComposeModal}
+            className="bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition shadow-lg shadow-red-600/20 cursor-pointer"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Enviar E-mail via Gmail</span>
+          </button>
+
+          <button
+            onClick={loadData}
+            className="bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Atualizar Caixa ({messages.length})</span>
+          </button>
+        </div>
       </div>
 
-      {/* INDICADORES OPERACIONAIS DO AG-012 (SEÇÃO 7.14) */}
+      {/* INDICADORES OPERACIONAIS DO AG-012 */}
       {operationalMetrics && (
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <div className="bg-slate-900 border border-slate-800 rounded-xl p-3.5">
@@ -302,7 +410,7 @@ export default function EmailsPage() {
             <div className="text-lg font-bold font-mono text-purple-300 mt-0.5">
               {operationalMetrics.drafts_produced_count}
             </div>
-            <div className="text-[10px] text-slate-500 font-mono">Prontas p/ Revisão</div>
+            <div className="text-[10px] text-slate-500 font-mono">Prontas p/ Envio</div>
           </div>
         </div>
       )}
@@ -316,73 +424,131 @@ export default function EmailsPage() {
           }`}
         >
           {feedback.isError ? <AlertCircle className="w-4 h-4 shrink-0" /> : <CheckCircle2 className="w-4 h-4 shrink-0" />}
-          <span>{feedback.text}</span>
+          <span className="flex-1">{feedback.text}</span>
+          <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white p-1">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
 
-      {/* 1. FORMULÁRIO DE CADASTRO DE CONTA HOSTGATOR CPANEL */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+      {/* 1. FORMULÁRIO DE CADASTRO DE CONTA (HOSTGATOR OU GMAIL) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
           <div className="flex items-center gap-2">
-            <Server className="w-4 h-4 text-sky-400" />
-            <h2 className="text-sm font-bold text-white uppercase tracking-wider">
-              Adicionar Nova Conta de E-mail (Padrão cPanel HostGator)
-            </h2>
+            <Server className="w-5 h-5 text-sky-400" />
+            <div>
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">
+                Adicionar Conta de E-mail para Monitoramento & Envio
+              </h2>
+              <p className="text-xs text-slate-400">
+                Selecione o provedor para preenchimento automático das configurações de conexão segura.
+              </p>
+            </div>
           </div>
-          <span className="text-[11px] text-slate-400 font-mono">
-            IMAP SSL: 993 • SMTP SSL: 465 • Host: mail.seudominio.com.br
-          </span>
+
+          {/* SELETOR DE PROVEDOR: HOSTGATOR CPANEL vs GMAIL */}
+          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={() => handleProviderChange('hostgator_cpanel')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold transition cursor-pointer ${
+                accountProvider === 'hostgator_cpanel'
+                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>HostGator cPanel</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleProviderChange('gmail')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 font-semibold transition cursor-pointer ${
+                accountProvider === 'gmail'
+                  ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Send className="w-3.5 h-3.5 text-red-400" />
+              <span>Gmail / Google Workspace</span>
+            </button>
+          </div>
         </div>
+
+        {/* DICA DE SENHA DE APP QUANDO GMAIL SELECIONADO */}
+        {accountProvider === 'gmail' && (
+          <div className="p-3 bg-red-950/20 border border-red-500/30 text-red-200 rounded-xl text-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Send className="w-4 h-4 text-red-400 shrink-0" />
+              <span>
+                Para contas Google / Gmail, use uma <strong>Senha de App de 16 caracteres</strong> (com autenticação em duas etapas ativa) gerada em sua conta Google.
+              </span>
+            </div>
+            <a
+              href="https://myaccount.google.com/apppasswords"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-red-400 underline hover:text-red-300 flex items-center gap-1 shrink-0 font-medium"
+            >
+              <span>Gerar Senha de App</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        )}
 
         <form onSubmit={handleCreateAccount} className="grid grid-cols-1 md:grid-cols-6 gap-4">
           <div className="md:col-span-1">
             <label className="text-[11px] text-slate-400 block mb-1">Identificação / Setor</label>
             <input
               type="text"
-              placeholder="Ex: Comercial / Faturas"
+              placeholder="Ex: Comercial / Gmail Fundador"
               value={accountLabel}
               onChange={(e) => setAccountLabel(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500"
             />
           </div>
 
           <div className="md:col-span-2">
-            <label className="text-[11px] text-slate-400 block mb-1">E-mail cPanel HostGator *</label>
+            <label className="text-[11px] text-slate-400 block mb-1">
+              Endereço de E-mail ({accountProvider === 'gmail' ? 'Gmail' : 'cPanel'}) *
+            </label>
             <input
               type="email"
               required
-              placeholder="contato@seudominio.com.br"
+              placeholder={accountProvider === 'gmail' ? 'seuemail@gmail.com' : 'contato@seudominio.com.br'}
               value={emailAddress}
               onChange={(e) => handleEmailChange(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-sky-500"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-sky-500"
             />
           </div>
 
           <div className="md:col-span-1">
-            <label className="text-[11px] text-slate-400 block mb-1">Senha do E-mail *</label>
+            <label className="text-[11px] text-slate-400 block mb-1">
+              {accountProvider === 'gmail' ? 'Senha de App (16 dígitos) *' : 'Senha do E-mail *'}
+            </label>
             <input
               type="password"
               required
-              placeholder="••••••••"
+              placeholder="••••••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-sky-500"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-sky-500"
             />
           </div>
 
           <div className="md:col-span-1">
-            <label className="text-[11px] text-slate-400 block mb-1">Servidor IMAP (Porta 993)</label>
+            <label className="text-[11px] text-slate-400 block mb-1">Servidor IMAP (SSL 993)</label>
             <input
               type="text"
-              placeholder="mail.seudominio.com.br"
+              placeholder={accountProvider === 'gmail' ? 'imap.gmail.com' : 'mail.seudominio.com.br'}
               value={imapHost}
               onChange={(e) => setImapHost(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 placeholder-slate-600 font-mono focus:outline-none focus:border-sky-500"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-300 placeholder-slate-600 font-mono focus:outline-none focus:border-sky-500"
             />
           </div>
 
           <div className="md:col-span-1">
-            <label className="text-[11px] text-slate-400 block mb-1">Modo Inicial na Linha</label>
+            <label className="text-[11px] text-slate-400 block mb-1">Modo na Linha</label>
             <select
               value={operationMode}
               onChange={(e) =>
@@ -390,19 +556,23 @@ export default function EmailsPage() {
                   e.target.value as 'monitor_only' | 'read_summarize' | 'assisted_action' | 'auto_action'
                 )
               }
-              className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
             >
-              <option value="read_summarize">📖 Somente Monitorar e Resumir</option>
+              <option value="read_summarize">📖 Somente Monitorar</option>
               <option value="assisted_action">🛡️ Ação Assistida (c/ Aprovação)</option>
               <option value="auto_action">⚡ Ação Automática</option>
             </select>
           </div>
 
-          <div className="md:col-span-6 flex justify-end pt-1">
+          <div className="md:col-span-6 flex items-center justify-between pt-1">
+            <div className="text-[11px] text-slate-500 font-mono">
+              SMTP: {smtpHost || (accountProvider === 'gmail' ? 'smtp.gmail.com:465' : 'mail.seudominio:465')} (SSL)
+            </div>
+
             <button
               type="submit"
               disabled={isCreating}
-              className="bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-bold px-5 py-2 rounded-lg text-xs flex items-center gap-2 transition shadow-lg shadow-sky-500/10"
+              className="bg-sky-500 hover:bg-sky-400 disabled:opacity-50 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-xs flex items-center gap-2 transition shadow-lg cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>{isCreating ? 'Cadastrando...' : 'Cadastrar Conta de E-mail'}</span>
@@ -411,32 +581,31 @@ export default function EmailsPage() {
         </form>
       </div>
 
-      {/* 2. TABELA DE MÚLTIPLAS CONTAS CADASTRADAS (CONTROLE POR LINHA) */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+      {/* 2. TABELA DE MÚLTIPLAS CONTAS CADASTRADAS */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-white">
               Contas de E-mail Cadastradas ({accounts.length})
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Em cada linha, alterne quando quiser entre <strong>Somente Monitorar</strong>,{' '}
-              <strong>Ação Assistida</strong> ou <strong>Ação Automática</strong>.
+              Gerencie conexões da HostGator e do Gmail. Dispare e-mails ou sincronize a caixa com 1 clique.
             </p>
           </div>
         </div>
 
         {accounts.length === 0 ? (
           <div className="p-8 text-center text-xs text-slate-400">
-            Nenhuma conta de e-mail cadastrada ainda. Adicione sua primeira conta HostGator cPanel no formulário acima.
+            Nenhuma conta de e-mail cadastrada ainda. Adicione uma conta HostGator ou Gmail no formulário acima.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-950/70 border-b border-slate-800 text-[11px] font-mono uppercase text-slate-400">
-                  <th className="py-3 px-4">Conta / E-mail</th>
-                  <th className="py-3 px-4">Servidor IMAP cPanel</th>
-                  <th className="py-3 px-4">Modo de Operação (Por Linha)</th>
+                  <th className="py-3 px-4">Conta / Provedor</th>
+                  <th className="py-3 px-4">Servidor IMAP / SMTP</th>
+                  <th className="py-3 px-4">Modo de Operação</th>
                   <th className="py-3 px-4">Último Status</th>
                   <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
@@ -446,16 +615,29 @@ export default function EmailsPage() {
                   const isBusy = busyAccountId === acc.id;
                   const isAuto = acc.operation_mode === 'auto_action';
                   const isAssisted = acc.operation_mode === 'assisted_action';
+                  const isGmailAccount = acc.provider === 'gmail' || acc.email_address.includes('gmail.com');
 
                   return (
                     <tr key={acc.id} className="hover:bg-slate-950/40 transition">
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-white">{acc.account_label}</div>
-                        <div className="text-[11px] text-sky-400 font-mono">{acc.email_address}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-white">{acc.account_label}</span>
+                          <span
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold ${
+                              isGmailAccount
+                                ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                                : 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                            }`}
+                          >
+                            {isGmailAccount ? 'Gmail' : 'HostGator'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-sky-400 font-mono mt-0.5">{acc.email_address}</div>
                       </td>
 
                       <td className="py-3.5 px-4 font-mono text-[11px] text-slate-300">
-                        {acc.imap_host}:{acc.imap_port} (SSL)
+                        <div>IMAP: {acc.imap_host}:{acc.imap_port}</div>
+                        <div className="text-slate-500 text-[10px]">SMTP: {acc.smtp_host || 'smtp.gmail.com'}:{acc.smtp_port || 465}</div>
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -476,8 +658,8 @@ export default function EmailsPage() {
                                 : 'bg-slate-950 border-slate-700 text-slate-200'
                           }`}
                         >
-                          <option value="read_summarize">📖 Somente Monitorar e Resumir</option>
-                          <option value="assisted_action">🛡️ Ação Assistida (Cria Tarefa c/ Aprovação)</option>
+                          <option value="read_summarize">📖 Somente Monitorar</option>
+                          <option value="assisted_action">🛡️ Ação Assistida (c/ Aprovação)</option>
                           <option value="auto_action">⚡ Ação Automática (Disparar Agentes)</option>
                         </select>
                       </td>
@@ -495,11 +677,27 @@ export default function EmailsPage() {
 
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          {/* BOTÃO ENVIAR VIA GMAIL / SMTP DESSA CONTA */}
+                          <button
+                            onClick={() => {
+                              setSendAccountId(acc.id);
+                              setSendTo('');
+                              setSendSubject('');
+                              setSendBody('');
+                              setIsSendModalOpen(true);
+                            }}
+                            className="bg-red-500/15 hover:bg-red-500/25 text-red-300 border border-red-500/30 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                            title="Disparar novo e-mail através desta conta"
+                          >
+                            <Send className="w-3 h-3 text-red-400" />
+                            <span>Enviar</span>
+                          </button>
+
                           <button
                             onClick={() => handleSyncAccount(acc.id)}
                             disabled={isBusy}
-                            className="bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
-                            title="Conectar ao servidor IMAP da HostGator e ler últimos e-mails"
+                            className="bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/30 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                            title="Conectar ao servidor IMAP e sincronizar mensagens"
                           >
                             <RefreshCw className={`w-3 h-3 ${isBusy ? 'animate-spin' : ''}`} />
                             <span>Ler IMAP</span>
@@ -508,8 +706,8 @@ export default function EmailsPage() {
                           <button
                             onClick={() => handleSimulateEmail(acc.id, 'bill')}
                             disabled={isBusy}
-                            className="bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition"
-                            title="Simular chegada de um e-mail comercial/fatura nesta conta para testar o AG-012"
+                            className="bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/30 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition cursor-pointer"
+                            title="Simular chegada de e-mail nesta conta para testar o AG-012"
                           >
                             <Sparkles className="w-3 h-3" />
                             <span>Testar Triagem</span>
@@ -518,7 +716,7 @@ export default function EmailsPage() {
                           <button
                             onClick={() => handleDeleteAccount(acc.id)}
                             disabled={isBusy}
-                            className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/30 transition"
+                            className="text-slate-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-950/30 transition cursor-pointer"
                             title="Remover conta"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -540,10 +738,10 @@ export default function EmailsPage() {
           <div>
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-purple-400" />
-              E-mails Analisados & Próximo Passo Recomendado (AG-012)
+              E-mails Analisados & Resposta Sugerida pelo AG-012
             </h2>
             <p className="text-xs text-slate-400">
-              Cada e-mail lido exibe o resumo executivo, o próximo passo estratégico e a minuta de resposta.
+              Cada mensagem recebida conta com resumo executivo, próximo passo estratégico e minuta pronta para envio via Gmail.
             </p>
           </div>
 
@@ -565,11 +763,11 @@ export default function EmailsPage() {
         </div>
 
         {messages.length === 0 ? (
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-10 text-center space-y-2">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-2">
             <Inbox className="w-9 h-9 text-slate-600 mx-auto" />
             <h3 className="text-sm font-bold text-slate-200">Nenhum E-mail Analisado Ainda</h3>
             <p className="text-xs text-slate-400 max-w-md mx-auto">
-              Cadastre uma conta de e-mail acima e clique em <strong>Ler IMAP</strong> (para buscar da sua caixa HostGator) ou em <strong>Testar Triagem</strong> para ver o <strong>AG-012</strong> em ação.
+              Cadastre uma conta de e-mail acima e clique em <strong>Ler IMAP</strong> ou em <strong>Testar Triagem</strong> para ver o <strong>AG-012</strong> classificar e minutar a resposta automaticamente.
             </p>
           </div>
         ) : (
@@ -582,7 +780,7 @@ export default function EmailsPage() {
               return (
                 <div
                   key={msg.id}
-                  className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 shadow-lg hover:border-slate-700 transition"
+                  className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-lg hover:border-slate-700 transition"
                 >
                   {/* Cabeçalho do E-mail */}
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-slate-800 pb-3">
@@ -646,7 +844,7 @@ export default function EmailsPage() {
                     </div>
 
                     {/* Botão ou Badge de Tarefa */}
-                    <div className="shrink-0">
+                    <div className="shrink-0 flex items-center gap-2">
                       {hasTask ? (
                         <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 rounded-lg">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -667,7 +865,7 @@ export default function EmailsPage() {
                         <button
                           onClick={() => handleExecuteNextStep(msg.id)}
                           disabled={busyMessageId === msg.id}
-                          className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md"
+                          className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md cursor-pointer"
                         >
                           <Play className="w-3.5 h-3.5" />
                           <span>
@@ -682,7 +880,7 @@ export default function EmailsPage() {
 
                   {/* Grid: Resumo Executivo + Próximo Passo Recomendado */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-1.5">
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-3.5 space-y-1.5">
                       <span className="text-[10px] font-mono uppercase text-sky-400 font-bold block">
                         📋 Resumo Executivo (AG-012)
                       </span>
@@ -697,7 +895,7 @@ export default function EmailsPage() {
                       </details>
                     </div>
 
-                    <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-lg p-3.5 space-y-1.5">
+                    <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-xl p-3.5 space-y-1.5">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-mono uppercase text-indigo-300 font-bold">
                           🎯 Próximo Passo Recomendado pelo AG-012
@@ -712,31 +910,64 @@ export default function EmailsPage() {
                     </div>
                   </div>
 
-                  {/* Minuta de Resposta Sugerida */}
+                  {/* Minuta de Resposta Sugerida COM DISPARO GMAIL DIRETO */}
                   {msg.suggested_reply_draft && (
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3.5 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-mono uppercase text-emerald-400 font-bold">
-                          ✉️ Minuta de Resposta Sugerida pelo AG-012
+                    <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-2.5">
+                        <span className="text-[11px] font-mono uppercase text-emerald-400 font-bold flex items-center gap-1.5">
+                          <Send className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>✉️ Minuta de Resposta Gerada pelo AG-012</span>
                         </span>
-                        <button
-                          onClick={() => handleCopyDraft(msg.id, msg.suggested_reply_draft)}
-                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-1 rounded text-[11px] flex items-center gap-1 transition"
-                        >
-                          {copiedId === msg.id ? (
-                            <>
-                              <Check className="w-3 h-3 text-emerald-400" />
-                              <span>Copiado!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy className="w-3 h-3" />
-                              <span>Copiar Resposta</span>
-                            </>
-                          )}
-                        </button>
+
+                        <div className="flex items-center gap-2">
+                          {/* BOTÃO 1: ENVIAR VIA GMAIL WEB (1 CLIQUE) */}
+                          <button
+                            onClick={() =>
+                              openGmailWebCompose(
+                                msg.from_address,
+                                msg.subject?.startsWith('Re:') ? msg.subject : `Re: ${msg.subject || ''}`,
+                                msg.suggested_reply_draft
+                              )
+                            }
+                            className="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                            title="Abrir diretamente na tela de resposta do Gmail Web"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Responder via Gmail</span>
+                            <ExternalLink className="w-3 h-3 text-red-200" />
+                          </button>
+
+                          {/* BOTÃO 2: OPÇÕES DE ENVIO / SMTP */}
+                          <button
+                            onClick={() => handleOpenSendModalForMessage(msg)}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition cursor-pointer"
+                            title="Abrir editor de envio para disparar via SMTP ou customizar"
+                          >
+                            <Mail className="w-3.5 h-3.5 text-sky-400" />
+                            <span>Opções de Envio</span>
+                          </button>
+
+                          {/* BOTÃO 3: COPIAR RESPOSTA */}
+                          <button
+                            onClick={() => handleCopyDraft(msg.id, msg.suggested_reply_draft)}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-1 transition cursor-pointer"
+                          >
+                            {copiedId === msg.id ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                <span>Copiado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copiar</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-300 font-mono whitespace-pre-wrap leading-relaxed">
+
+                      <p className="text-xs text-slate-300 font-mono whitespace-pre-wrap leading-relaxed bg-slate-900/60 p-3 rounded-lg border border-slate-800/80">
                         {msg.suggested_reply_draft}
                       </p>
                     </div>
@@ -747,7 +978,141 @@ export default function EmailsPage() {
           </div>
         )}
       </div>
+
+      {/* ========================================================================= */}
+      {/* MODAL DE ENVIO DE E-MAIL VIA GMAIL / SERVIDOR SMTP                         */}
+      {/* ========================================================================= */}
+      {isSendModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-red-950/40 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-red-500/20 text-red-400 rounded-lg">
+                  <Send className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Disparo de E-mail via Gmail</h3>
+                  <p className="text-xs text-slate-400">
+                    Envie em 1 clique pelo <strong>Gmail Web</strong> ou dispare diretamente pelo <strong>Servidor SMTP</strong>.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsSendModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSendViaSmtp} className="p-6 space-y-4 overflow-y-auto flex-1">
+              {/* Seleção de Conta Remetente */}
+              <div>
+                <label className="text-xs text-slate-300 font-semibold block mb-1">
+                  Conta Remetente (De)
+                </label>
+                <select
+                  value={sendAccountId}
+                  onChange={(e) => setSendAccountId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-red-500"
+                >
+                  <option value="">Minha Conta Gmail Padrão (Gmail Web)</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.account_label} ({acc.email_address}) • {acc.provider === 'gmail' ? 'Gmail' : 'HostGator'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Destinatário */}
+              <div>
+                <label className="text-xs text-slate-300 font-semibold block mb-1">
+                  Destinatário (Para) *
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="cliente@empresa.com.br ou distribuidora@concessionaria.com.br"
+                  value={sendTo}
+                  onChange={(e) => setSendTo(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-red-500"
+                />
+              </div>
+
+              {/* Assunto */}
+              <div>
+                <label className="text-xs text-slate-300 font-semibold block mb-1">
+                  Assunto da Mensagem *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Re: Análise de Fatura de Energia / Laudo Técnico AG-003"
+                  value={sendSubject}
+                  onChange={(e) => setSendSubject(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500"
+                />
+              </div>
+
+              {/* Corpo da Mensagem */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-slate-300 font-semibold">
+                    Corpo do E-mail / Mensagem *
+                  </label>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    {sendBody.length} caracteres
+                  </span>
+                </div>
+                <textarea
+                  required
+                  rows={8}
+                  placeholder="Prezada diretoria, segue parecer conclusivo..."
+                  value={sendBody}
+                  onChange={(e) => setSendBody(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3.5 text-xs text-white font-mono placeholder-slate-500 focus:outline-none focus:border-red-500 leading-relaxed"
+                />
+              </div>
+
+              {/* Modal Actions */}
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => openGmailWebCompose(sendTo, sendSubject, sendBody)}
+                  className="w-full sm:w-auto bg-red-600 hover:bg-red-500 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition shadow-lg shadow-red-600/30 cursor-pointer"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>Abrir no Gmail Web (1-Clique)</span>
+                  <ExternalLink className="w-3.5 h-3.5 text-red-200" />
+                </button>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setIsSendModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={isSendingEmail}
+                    className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold px-5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition shadow-lg cursor-pointer"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>{isSendingEmail ? 'Disparando...' : 'Disparar via SMTP'}</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

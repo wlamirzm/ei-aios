@@ -33,7 +33,8 @@ import {
   computeEmailOperationalMetrics,
   EmailAccountRow
 } from '../tools/email-intelligence.js';
-import { encryptSecret } from '../config/crypto-vault.js';
+import nodemailer from 'nodemailer';
+import { encryptSecret, decryptSecret } from '../config/crypto-vault.js';
 import {
   requireFounderAuth,
   createFounderAuthToken,
@@ -791,6 +792,7 @@ apiRouter.post('/api/v1/emails/accounts', async (req: Request, res: Response, ne
       account_label,
       email_address,
       password,
+      provider,
       imap_host,
       imap_port,
       smtp_host,
@@ -799,13 +801,16 @@ apiRouter.post('/api/v1/emails/accounts', async (req: Request, res: Response, ne
     } = req.body || {};
 
     if (!email_address || !password) {
-      res.status(400).json({ error: 'Informe o endereço de e-mail e a senha do cPanel HostGator.' });
+      res.status(400).json({ error: 'Informe o endereço de e-mail e a senha.' });
       return;
     }
 
     const cleanEmail = String(email_address).trim().toLowerCase();
+    const isGmail = provider === 'gmail' || cleanEmail.includes('gmail.com');
     const domainPart = cleanEmail.split('@')[1] || 'seudominio.com.br';
     const defaultHost = `mail.${domainPart}`;
+    const defaultImapHost = isGmail ? 'imap.gmail.com' : defaultHost;
+    const defaultSmtpHost = isGmail ? 'smtp.gmail.com' : defaultHost;
     const encryptedPassword = encryptSecret(String(password));
 
     const validModes = new Set(['monitor_only', 'read_summarize', 'assisted_action', 'auto_action']);
@@ -816,16 +821,18 @@ apiRouter.post('/api/v1/emails/accounts', async (req: Request, res: Response, ne
       .insert({
         account_label: account_label?.trim() || cleanEmail,
         email_address: cleanEmail,
-        provider: 'hostgator_cpanel',
-        imap_host: imap_host?.trim() || defaultHost,
+        provider: isGmail ? 'gmail' : (provider || 'hostgator_cpanel'),
+        imap_host: imap_host?.trim() || defaultImapHost,
         imap_port: Number(imap_port) || 993,
-        smtp_host: smtp_host?.trim() || defaultHost,
+        smtp_host: smtp_host?.trim() || defaultSmtpHost,
         smtp_port: Number(smtp_port) || 465,
         username: cleanEmail,
         password_secret: encryptedPassword,
         operation_mode: resolvedMode,
         enabled: true,
-        last_sync_status: 'Conta cPanel cadastrada (AES-256-GCM) — pronta para leitura'
+        last_sync_status: isGmail
+          ? 'Conta Gmail cadastrada (AES-256-GCM) — pronta para sincronização e envio'
+          : 'Conta cPanel cadastrada (AES-256-GCM) — pronta para leitura'
       })
       .select('id, account_label, email_address, provider, imap_host, imap_port, smtp_host, smtp_port, username, operation_mode, enabled, last_synced_at, last_sync_status, created_at')
       .single();
@@ -1272,6 +1279,116 @@ apiRouter.post('/api/v1/emails/messages/:id/execute-next-step', async (req: Requ
     });
   } catch (err) {
     next(err);
+  }
+});
+
+// ------------------------------------------------------------------------------
+// POST /api/v1/emails/send (Disparo de E-mail via SMTP Gmail ou HostGator)
+// ------------------------------------------------------------------------------
+apiRouter.post('/api/v1/emails/send', async (req: Request, res: Response, _next: NextFunction) => {
+  try {
+    const {
+      accountId,
+      to,
+      subject,
+      text,
+      html,
+      customUser,
+      customPass,
+      customHost,
+      customPort
+    } = req.body || {};
+
+    if (!to || !subject || !text) {
+      res.status(400).json({ error: 'Destinatário (to), assunto (subject) e mensagem (text) são obrigatórios.' });
+      return;
+    }
+
+    let smtpHost = 'smtp.gmail.com';
+    let smtpPort = 465;
+    let authUser = '';
+    let authPass = '';
+    let fromDisplay = '';
+
+    if (accountId) {
+      const { data: account, error: accErr } = await supabase
+        .from('email_accounts')
+        .select('*')
+        .eq('id', accountId)
+        .single();
+
+      if (accErr || !account) {
+        res.status(404).json({ error: 'Conta de e-mail especificada não foi encontrada.' });
+        return;
+      }
+
+      smtpHost = account.smtp_host || (account.provider === 'gmail' ? 'smtp.gmail.com' : 'mail.' + account.email_address.split('@')[1]);
+      smtpPort = Number(account.smtp_port) || 465;
+      authUser = account.username || account.email_address;
+      authPass = decryptSecret(account.password_secret);
+      fromDisplay = `"${account.account_label}" <${account.email_address}>`;
+    } else if (customUser && customPass) {
+      smtpHost = customHost || (customUser.includes('gmail.com') ? 'smtp.gmail.com' : 'smtp.gmail.com');
+      smtpPort = Number(customPort) || 465;
+      authUser = customUser;
+      authPass = customPass;
+      fromDisplay = authUser;
+    } else {
+      // Procura conta configurada no banco (prioriza Gmail)
+      const { data: accounts } = await supabase
+        .from('email_accounts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      const gmailAccount = accounts?.find((a: any) => a.provider === 'gmail' || a.email_address.includes('gmail.com'));
+      const chosenAccount = gmailAccount || accounts?.[0];
+
+      if (!chosenAccount) {
+        res.status(400).json({
+          error: 'Nenhuma conta configurada para disparo SMTP. Cadastre uma conta Gmail ou forneça as credenciais de envio.'
+        });
+        return;
+      }
+
+      smtpHost = chosenAccount.smtp_host || 'smtp.gmail.com';
+      smtpPort = Number(chosenAccount.smtp_port) || 465;
+      authUser = chosenAccount.username || chosenAccount.email_address;
+      authPass = decryptSecret(chosenAccount.password_secret);
+      fromDisplay = `"${chosenAccount.account_label}" <${chosenAccount.email_address}>`;
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: authUser,
+        pass: authPass
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+
+    const info = await transporter.sendMail({
+      from: fromDisplay,
+      to,
+      subject,
+      text,
+      html: html || undefined
+    });
+
+    res.json({
+      success: true,
+      messageId: info.messageId,
+      envelope: info.envelope,
+      response: info.response,
+      sentFrom: fromDisplay
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      error: `Falha no envio de e-mail via SMTP: ${err?.message || err}`
+    });
   }
 });
 
