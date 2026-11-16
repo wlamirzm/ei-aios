@@ -1866,7 +1866,7 @@ apiRouter.post('/api/v1/telegram/config', requireFounderAuth, async (req: Reques
       adminChatId,
       webhookUrl
     });
-    res.json({ success: true, ...result });
+    res.json(result);
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message || 'Erro ao salvar configuração do Telegram' });
   }
