@@ -41,6 +41,7 @@ import {
   searchDriveFiles,
   uploadDriveReport
 } from '../tools/google-drive.js';
+import { DEFAULT_AGENT_REGISTRY } from '../agents/registry.js';
 import {
   requireFounderAuth,
   createFounderAuthToken,
@@ -490,10 +491,34 @@ apiRouter.get('/api/v1/agents', async (_req: Request, res: Response) => {
       return;
     }
 
+    const dbAgents: any[] = result.data ? [...result.data] : [];
+    const dbAgentIds = new Set(dbAgents.map((a: any) => a.id));
+
+    // Enriquecimento e sincronização automática caso alguma migration ainda não tenha rodado
+    for (const [id, def] of Object.entries(DEFAULT_AGENT_REGISTRY)) {
+      if (!dbAgentIds.has(id)) {
+        dbAgents.push({
+          id: def.id,
+          name: def.name,
+          role: def.systemPrompt.slice(0, 150) + '...',
+          description: def.systemPrompt.slice(0, 150) + '...',
+          system_prompt: def.systemPrompt,
+          agent_type: def.agentType,
+          default_model: def.model,
+          temperature: def.temperature,
+          daily_token_budget: def.dailyBudgetUsd,
+          status: def.enabled ? 'active' : 'inactive',
+          enabled: def.enabled
+        });
+      }
+    }
+
+    dbAgents.sort((a: any, b: any) => a.id.localeCompare(b.id));
+
     res.json({
       success: true,
-      agents: result.data || [],
-      count: result.data?.length || 0
+      agents: dbAgents,
+      count: dbAgents.length
     });
   } catch (error: any) {
     res.status(500).json({

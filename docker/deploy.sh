@@ -63,12 +63,14 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0012_diagnostic_reports.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0013_agents_legal_product.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0014_agents_presentation_mobile_sre.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0015_agent_ag018_google_drive.sql
 
     # Garante permissões e compatibilidade de telemetria sem conceder escrita para anon
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "
       ALTER TABLE agent_runs ALTER COLUMN task_id DROP NOT NULL;
       ALTER TABLE agents DISABLE ROW LEVEL SECURITY;
       ALTER TABLE knowledge_sources DISABLE ROW LEVEL SECURITY;
+      ALTER TABLE google_drive_configs DISABLE ROW LEVEL SECURITY;
       GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
       GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated, service_role, postgres;
       GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role, postgres;

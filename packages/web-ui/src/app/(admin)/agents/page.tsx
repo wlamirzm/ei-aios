@@ -250,11 +250,11 @@ export default function AgentsPage() {
             res.agents.map((a: any) => ({
               id: a.id,
               name: a.name,
-              role: a.role_description,
-              model: a.configuration?.model || (a.id === 'AG-001' || a.id === 'AG-003' || a.id === 'AG-008' || a.id === 'AG-009' || a.id === 'AG-013' ? 'claude-sonnet-5-5' : 'claude-haiku-5-5'),
-              temperature: a.configuration?.temperature ?? 0.2,
-              daily_budget: a.configuration?.daily_budget_usd ?? 5.0,
-              enabled: a.enabled ?? true,
+              role: a.role_description || a.role || a.description || 'Agente especializado',
+              model: a.default_model || a.configuration?.model || (a.id === 'AG-001' || a.id === 'AG-003' || a.id === 'AG-008' || a.id === 'AG-009' || a.id === 'AG-013' ? 'claude-sonnet-5-5' : 'gemini-2.5-flash'),
+              temperature: a.temperature ?? a.configuration?.temperature ?? 0.2,
+              daily_budget: a.daily_token_budget ?? a.configuration?.daily_budget_usd ?? 5.0,
+              enabled: a.enabled ?? (a.status !== 'inactive'),
               system_prompt: a.system_prompt
             }))
           );
