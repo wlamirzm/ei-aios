@@ -7,6 +7,7 @@ import { supabase } from '../config/supabase.js';
 import { TaskStatus } from '@ei-aios/shared';
 import { orchestrator } from '../engine/orchestrator.js';
 import { encryptSecret, decryptSecret } from '../config/crypto-vault.js';
+import { llmService } from '../config/llm.js';
 
 export interface TelegramConfigStatus {
   configured: boolean;
@@ -340,17 +341,40 @@ export class TelegramConciergeService {
   }
 
   /**
-   * Processa comandos de texto enviados pelo fundador no Telegram (ex.: /status, /kpis, ou instruções estratégicas)
+   * Processa comandos de texto e mensagens enviadas pelo fundador no Telegram
    */
   async handleIncomingTextMessage(senderId: string, text: string): Promise<string> {
+    await this.resolveCredentials();
+
     if (this.adminChatId && senderId !== this.adminChatId) {
-      return '⛔ Acesso restrito ao fundador sovereign do EI-AIOS.';
+      const msg = '⛔ *Acesso Restrito*\nEste bot é o gateway executivo exclusivo do fundador da Energy Intelligence.';
+      await this.sendMessage({ chatId: senderId, text: msg });
+      return msg;
     }
 
     const trimmed = text.trim();
+    const lower = trimmed.toLowerCase();
 
-    // 1. Comando /status
-    if (trimmed === '/status' || trimmed === '/health') {
+    // 1. Comando /start, /help, /ajuda
+    if (lower === '/start' || lower === '/help' || lower === '/ajuda' || lower === 'ajuda') {
+      const welcome = `👋 *Olá, Fundador! Sou o AG-016 (Telegram Mobile Concierge).*\n\n` +
+        `Estou conectado à infraestrutura do EI-AIOS e ao AI Orchestrator (AG-001).\n\n` +
+        `🛠️ *Comandos Rápidos:*\n` +
+        `• \`/status\` — Fila de tarefas, saúde do worker e aprovações pendentes.\n` +
+        `• \`/kpis\` — FinOps, MRR recorrente e consumo acumulado de IA.\n` +
+        `• \`/tarefas\` — Lista as últimas tarefas em execução.\n` +
+        `• \`/ajuda\` — Exibe esta mensagem de ajuda.\n\n` +
+        `💬 *Como interagir comigo:*\n` +
+        `• *Conversa direta:* Pode falar comigo normalmente (ex: "Boa noite", "Como está o sistema?", "O que você faz?").\n` +
+        `• *Criar tarefas no AG-001:* Para disparar uma nova macro-tarefa, envie comandos de ação como *Criar tarefa: ...*, *Objetivo: ...* ou instruções como *"Analise as faturas da Cemig do cliente X"*.\n\n` +
+        `🚨 *Aprovações HITL:* Quando qualquer agente precisar da sua validação (Nível 2), enviarei os botões [Aprovar] e [Rejeitar] diretamente aqui!`;
+
+      await this.sendMessage({ chatId: senderId, text: welcome });
+      return welcome;
+    }
+
+    // 2. Comando /status ou /health
+    if (lower === '/status' || lower === '/health') {
       const { data: pendingTasks } = await supabase
         .from('tasks')
         .select('id, status, requires_approval')
@@ -359,47 +383,132 @@ export class TelegramConciergeService {
       const countPending = pendingTasks?.filter(t => !t.requires_approval).length || 0;
       const countHitl = pendingTasks?.filter(t => t.requires_approval).length || 0;
 
-      return `📊 *STATUS DO SISTEMA EI-AIOS*\n\n` +
+      const reply = `📊 *STATUS DO SISTEMA EI-AIOS*\n\n` +
         `• *Autonomous Worker:* 🟢 Online (5s poll)\n` +
         `• *Tarefas em Fila:* ${countPending}\n` +
         `• *Aprovações Pendentes (HITL):* ${countHitl}\n` +
         `• *Ambiente:* Produção Cloud (Hostinger VPS)\n\n` +
-        `_Envie uma instrução estratégica para decomposição direta pelo AG-001._`;
+        `_Envie uma instrução operacional para o AG-001 ou digite /tarefas para ver a fila._`;
+
+      await this.sendMessage({ chatId: senderId, text: reply });
+      return reply;
     }
 
-    // 2. Comando /kpis
-    if (trimmed === '/kpis' || trimmed === '/finops') {
+    // 3. Comando /kpis ou /finops
+    if (lower === '/kpis' || lower === '/finops') {
       const { data: clients } = await supabase.from('clients').select('mrr_brl');
       const totalMrr = (clients || []).reduce((acc, c) => acc + (Number(c.mrr_brl) || 0), 0);
 
       const { data: runs } = await supabase.from('agent_runs').select('cost_estimate');
       const totalAiCost = (runs || []).reduce((acc, r) => acc + (Number(r.cost_estimate) || 0), 0);
 
-      return `💰 *FINOPS & METRICAS EXECUTIVAS (AG-011)*\n\n` +
+      const reply = `💰 *FINOPS & METRICAS EXECUTIVAS (AG-011)*\n\n` +
         `• *MRR Recorrente:* R$ ${totalMrr.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n` +
         `• *Gasto IA Acumulado:* $${totalAiCost.toFixed(4)} USD\n` +
         `• *Clientes Ativos:* ${clients?.length || 0}\n\n` +
         `_Governança e auditoria conforme ANEEL REN 1.000/2021._`;
+
+      await this.sendMessage({ chatId: senderId, text: reply });
+      return reply;
     }
 
-    // 3. Instrução Estratégica -> Envia direto para o AI Orchestrator (AG-001)
-    try {
+    // 4. Comando /tarefas ou /tasks
+    if (lower === '/tarefas' || lower === '/tasks') {
+      const { data: recentTasks } = await supabase
+        .from('tasks')
+        .select('task_code, objective, assigned_agent_id, status')
+        .in('status', ['pending', 'running'])
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!recentTasks || recentTasks.length === 0) {
+        const reply = `📋 *TAREFAS NO PIPELINE*\n\nNenhuma tarefa pendente ou em execução no momento. O enxame está pronto para novas ordens!`;
+        await this.sendMessage({ chatId: senderId, text: reply });
+        return reply;
+      }
+
+      const list = recentTasks
+        .map(t => `• \`${t.task_code}\` (${t.assigned_agent_id}): ${t.objective.slice(0, 80)}... [${t.status.toUpperCase()}]`)
+        .join('\n');
+
+      const reply = `📋 *TAREFAS EM ANDAMENTO (${recentTasks.length}):*\n\n${list}`;
+      await this.sendMessage({ chatId: senderId, text: reply });
+      return reply;
+    }
+
+    // 5. Identificação de Intenção: Criação de Tarefa/Objetivo vs Conversação Concierge
+    const isExplicitTask =
+      lower.startsWith('criar tarefa') ||
+      lower.startsWith('tarefa:') ||
+      lower.startsWith('objetivo:') ||
+      lower.startsWith('/executar') ||
+      lower.startsWith('/objetivo') ||
+      lower.startsWith('executar:');
+
+    const isActionOriented =
+      !isExplicitTask &&
+      (lower.startsWith('analise') ||
+        lower.startsWith('pesquise') ||
+        lower.startsWith('calcule') ||
+        lower.startsWith('audite') ||
+        lower.startsWith('crie um') ||
+        lower.startsWith('gere um') ||
+        lower.startsWith('elabore')) &&
+      trimmed.split(/\s+/).length >= 4;
+
+    if (isExplicitTask || isActionOriented) {
+      const cleanObjective = trimmed
+        .replace(/^(criar tarefa:?|tarefa:?|objetivo:?|\/executar|\/objetivo|executar:?)/i, '')
+        .trim();
+
       await this.sendMessage({
         chatId: senderId,
-        text: `⚡ *Instrução Recebida!*\n\n"${trimmed}"\n\n_O AG-001 está decompondo este objetivo em subtarefas atômicas..._`
+        text: `⚡ *Instrução Operacional Recebida!*\n\n"${cleanObjective}"\n\n_O AG-001 está decompondo este objetivo em subtarefas atômicas..._`
       });
 
-      const { parentTaskId, plan } = await orchestrator.decomposeObjective({
-        objective: trimmed
+      try {
+        const { parentTaskId, plan } = await orchestrator.decomposeObjective({
+          objective: cleanObjective
+        });
+
+        const reply = `🎯 *Planejamento Concluído pelo AG-001!*\n\n` +
+          `• *ID da Tarefa Macro:* \`${parentTaskId.slice(0, 8)}\`\n` +
+          `• *Subtarefas Criadas:* ${plan.decomposed_tasks.length}\n` +
+          `• *Complexidade:* ${plan.estimated_complexity.toUpperCase()}\n` +
+          `• *Status:* Em execução pelo Autonomous Worker.`;
+
+        await this.sendMessage({ chatId: senderId, text: reply });
+        return reply;
+      } catch (err: any) {
+        const reply = `⚠️ Erro ao registrar objetivo estratégico no AG-001: ${err.message || String(err)}`;
+        await this.sendMessage({ chatId: senderId, text: reply });
+        return reply;
+      }
+    }
+
+    // 6. Conversação Natural Executiva (AG-016 Concierge)
+    try {
+      const conciergePrompt =
+        `Você é o AG-016 (Telegram Mobile Concierge & HITL Gateway) da Energy Intelligence.\n` +
+        `Você está conversando diretamente com o fundador soberano da empresa via Telegram.\n` +
+        `Mantenha um tom executivo, prestativo, inteligente e cordial em português do Brasil.\n` +
+        `Se o usuário der saudações (ex: "Boa noite", "Bom dia", "Olá"), responda amigavelmente informando que você e os 18 agentes estão atentos e operando normalmente.\n` +
+        `Lembre o fundador que ele pode enviar instruções de trabalho (ex: "analise a fatura do cliente X") ou consultar /status e /kpis a qualquer momento.`;
+
+      const aiReply = await llmService.chatWithAgent({
+        agentId: 'AG-016',
+        systemInstruction: conciergePrompt,
+        message: trimmed,
+        model: 'gemini-2.5-flash'
       });
 
-      return `🎯 *Planejamento Concluído pelo AG-001!*\n\n` +
-        `• *ID da Tarefa Macro:* \`${parentTaskId.slice(0, 8)}\`\n` +
-        `• *Subtarefas Criadas:* ${plan.decomposed_tasks.length}\n` +
-        `• *Complexidade:* ${plan.estimated_complexity.toUpperCase()}\n` +
-        `• *Status:* Em execução pelo Autonomous Worker.`;
-    } catch (err: any) {
-      return `⚠️ Erro ao registrar objetivo estratégico: ${err.message || String(err)}`;
+      const reply = aiReply.reply;
+      await this.sendMessage({ chatId: senderId, text: reply });
+      return reply;
+    } catch {
+      const fallback = `👋 Olá, Fundador! Sou o AG-016. Todos os sistemas estão monitorados. Digite /ajuda para ver os comandos ou me envie uma instrução operacional.`;
+      await this.sendMessage({ chatId: senderId, text: fallback });
+      return fallback;
     }
   }
 }

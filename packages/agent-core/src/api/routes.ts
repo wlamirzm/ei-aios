@@ -1820,16 +1820,18 @@ apiRouter.post('/api/v1/telegram/webhook', async (req: Request, res: Response) =
       return;
     }
 
-    // Mensagem de Texto (Comandos /status, /kpis ou Instruções Estratégicas)
+    // Mensagem de Texto (Comandos /status, /kpis, saudações ou instruções operacionais)
     if (update.message && update.message.text) {
       const senderId = String(update.message.from.id);
       const text = update.message.text;
-      const reply = await telegramConcierge.handleIncomingTextMessage(senderId, text);
-      await telegramConcierge.sendMessage({
-        chatId: senderId,
-        text: reply
-      });
+
+      // Responde imediatamente com 200 OK para evitar retentativas e mensagens duplicadas pelo Telegram
       res.json({ ok: true });
+
+      // Processa a mensagem de forma assíncrona
+      telegramConcierge.handleIncomingTextMessage(senderId, text).catch(err => {
+        console.error('[TelegramWebhook] Error processing text message:', err);
+      });
       return;
     }
 
