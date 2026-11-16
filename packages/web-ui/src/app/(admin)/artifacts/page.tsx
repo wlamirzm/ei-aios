@@ -20,9 +20,12 @@ import {
   Layers,
   FileSpreadsheet,
   FileCheck2,
-  CheckCircle2
+  CheckCircle2,
+  CloudUpload,
+  ExternalLink,
+  AlertCircle
 } from 'lucide-react';
-import { fetchArtifacts, fetchTasks } from '@/lib/api-client';
+import { fetchArtifacts, fetchTasks, uploadArtifactToDrive } from '@/lib/api-client';
 import { ExecutiveDeliverableView } from '@/components/ExecutiveDeliverableView';
 
 interface TaskItem {
@@ -76,6 +79,29 @@ export default function ArtifactsPage() {
   const [isViewingMasterReport, setIsViewingMasterReport] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+  const [isUploadingToDrive, setIsUploadingToDrive] = useState(false);
+  const [driveUploadResult, setDriveUploadResult] = useState<{ url?: string; name?: string; error?: string } | null>(null);
+
+  const handleSaveToDrive = async (fileName: string, content: string) => {
+    setIsUploadingToDrive(true);
+    setDriveUploadResult(null);
+    try {
+      const res = await uploadArtifactToDrive({
+        fileName,
+        content
+      });
+      setDriveUploadResult({
+        url: res.webViewLink,
+        name: res.name || fileName
+      });
+    } catch (err: any) {
+      setDriveUploadResult({
+        error: err.message || 'Falha ao salvar no Google Drive'
+      });
+    } finally {
+      setIsUploadingToDrive(false);
+    }
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -352,14 +378,28 @@ export default function ArtifactsPage() {
               </button>
               <button
                 onClick={() => window.print()}
-                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md"
+                className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Exportar PDF Master</span>
               </button>
               <button
+                onClick={() =>
+                  handleSaveToDrive(
+                    `RELATORIO_MASTER_${selectedMacroNode?.macroTask.task_code || 'MACRO'}_CONSOLIDADO.md`,
+                    masterReport || ''
+                  )
+                }
+                disabled={isUploadingToDrive || !masterReport}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                title="Salvar relatório no Google Drive através do AG-018"
+              >
+                <CloudUpload className={`w-3.5 h-3.5 ${isUploadingToDrive ? 'animate-bounce' : ''}`} />
+                <span>{isUploadingToDrive ? 'Salvando...' : 'Salvar no Drive (AG-018)'}</span>
+              </button>
+              <button
                 onClick={handleDownloadMasterReport}
-                className="bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition"
+                className="bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Baixar .md</span>
@@ -368,6 +408,20 @@ export default function ArtifactsPage() {
           ) : (
             selectedArtifact && (
               <>
+                <button
+                  onClick={() =>
+                    handleSaveToDrive(
+                      `${selectedArtifact.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.md`,
+                      selectedArtifact.content_markdown || ''
+                    )
+                  }
+                  disabled={isUploadingToDrive}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                  title="Salvar este artefato no Google Drive através do AG-018"
+                >
+                  <CloudUpload className={`w-3.5 h-3.5 ${isUploadingToDrive ? 'animate-bounce' : ''}`} />
+                  <span>{isUploadingToDrive ? 'Salvando...' : 'Salvar no Drive'}</span>
+                </button>
                 <button
                   onClick={handleCopy}
                   className="bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition"
@@ -674,14 +728,28 @@ export default function ArtifactsPage() {
                       </button>
                       <button
                         onClick={() => window.print()}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md"
+                        className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-3.5 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Exportar PDF Master</span>
                       </button>
                       <button
+                        onClick={() =>
+                          handleSaveToDrive(
+                            `RELATORIO_MASTER_${selectedMacroNode.macroTask.task_code}_CONSOLIDADO.md`,
+                            masterReport || ''
+                          )
+                        }
+                        disabled={isUploadingToDrive || !masterReport}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+                        title="Salvar relatório no Google Drive através do AG-018"
+                      >
+                        <CloudUpload className={`w-3.5 h-3.5 ${isUploadingToDrive ? 'animate-bounce' : ''}`} />
+                        <span>{isUploadingToDrive ? 'Salvando...' : 'Salvar no Drive'}</span>
+                      </button>
+                      <button
                         onClick={handleDownloadMasterReport}
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" />
                         <span>Baixar .md</span>
@@ -725,6 +793,50 @@ export default function ArtifactsPage() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* NOTIFICAÇÃO FLUTUANTE DE UPLOAD GOOGLE DRIVE (AG-018) */}
+      {driveUploadResult && (
+        <div
+          className={`fixed top-5 right-5 z-[80] max-w-md w-[calc(100vw-40px)] sm:w-full p-4 rounded-2xl border shadow-2xl flex items-start gap-3 backdrop-blur-md animate-in slide-in-from-top-4 duration-200 ${
+            driveUploadResult.error
+              ? 'bg-rose-950/95 border-rose-500/60 text-rose-200 shadow-rose-950/50'
+              : 'bg-indigo-950/95 border-indigo-500/60 text-indigo-200 shadow-indigo-950/50'
+          }`}
+        >
+          {driveUploadResult.error ? (
+            <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-indigo-400 mt-0.5" />
+          )}
+          <div className="flex-1 text-xs font-mono leading-relaxed">
+            <span className="font-bold block text-white text-sm mb-1">
+              {driveUploadResult.error ? 'Erro no Google Drive' : 'Salvo no Google Drive (AG-018)'}
+            </span>
+            <span>
+              {driveUploadResult.error
+                ? driveUploadResult.error
+                : `O arquivo "${driveUploadResult.name}" foi sincronizado com sucesso no repositório em nuvem.`}
+            </span>
+            {driveUploadResult.url && (
+              <a
+                href={driveUploadResult.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 text-indigo-300 underline flex items-center gap-1 font-semibold hover:text-white"
+              >
+                <span>Abrir no Google Drive</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
+          <button
+            onClick={() => setDriveUploadResult(null)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

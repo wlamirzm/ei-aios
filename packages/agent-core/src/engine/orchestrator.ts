@@ -58,6 +58,7 @@ Sua missão como AG-001 (AI Orchestrator):
 1. Analise o objetivo e decomponha em 2 a 4 subtarefas atômicas, com dependências claras entre elas.
 2. Atribua cada tarefa EXCLUSIVAMENTE a um destes IDs de agente ativos no AgentRegistry:
    ${catalogSummary}
+   DIRETRIZ DE STORAGE & CLOUD: Se o objetivo envolver Google Drive, busca de arquivos em pastas de nuvem ou upload de relatórios/laudos, atribua a tarefa ao AG-018 (Google Workspace & Cloud Drive Agent).
 3. Para tarefas com envio externo, impacto financeiro ou proposta comercial, defina requires_approval = true e risk_level = "LEVEL_2_APPROVAL_REQUIRED".
 4. Retorne EXCLUSIVAMENTE um JSON válido com estas chaves exatas:
 {

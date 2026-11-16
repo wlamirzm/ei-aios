@@ -46,7 +46,8 @@ export enum AgentId {
   AG_014 = 'AG-014', // Product & Ops Agent
   AG_015 = 'AG-015', // Executive Presentation & Pitch Deck Agent
   AG_016 = 'AG-016', // Telegram Mobile Concierge & HITL Gateway
-  AG_017 = 'AG-017'  // SRE & Cloud Observability Agent
+  AG_017 = 'AG-017', // SRE & Cloud Observability Agent
+  AG_018 = 'AG-018'  // Google Workspace & Cloud Drive Agent
 }
 
 export enum WorkflowCode {

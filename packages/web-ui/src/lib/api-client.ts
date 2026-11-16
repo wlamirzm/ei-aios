@@ -349,6 +349,66 @@ export async function sendEmailMessage(payload: {
 }
 
 // ---------------------------------------------------------------------------
+// GOOGLE WORKSPACE & CLOUD DRIVE (AG-018)
+// ---------------------------------------------------------------------------
+
+export async function fetchDriveStatus() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/drive/status`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(false)
+  });
+  if (!res.ok) throw new Error('Falha ao obter status do Google Drive');
+  return res.json();
+}
+
+export async function configureDriveServiceAccount(payload: {
+  serviceAccountJson: string;
+  defaultFolderId?: string;
+  reportsFolderId?: string;
+}) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/drive/config`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao salvar configuração do Google Drive');
+  return data;
+}
+
+export async function searchDriveFiles(payload: {
+  query?: string;
+  folderId?: string;
+  mimeType?: string;
+  limit?: number;
+}) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/drive/search`, {
+    method: 'POST',
+    headers: getAuthHeaders(false),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao buscar arquivos no Google Drive');
+  return data;
+}
+
+export async function uploadArtifactToDrive(payload: {
+  fileName: string;
+  content: string;
+  mimeType?: string;
+  parentFolderId?: string;
+}) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/drive/upload`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao salvar relatório no Google Drive');
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // CLIENT FLOW: Consumer Units & Diagnostic Reports
 // ---------------------------------------------------------------------------
 

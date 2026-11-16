@@ -15,6 +15,7 @@ import { runMarketIntelligenceAudit, runProspectIntelligenceDossier } from '../t
 import { SlideEngine } from '../tools/slide-engine.js';
 import { SocialIntelligenceEngine } from '../tools/social-intelligence.js';
 import { SreMetricsCollector } from '../tools/sre-metrics-collector.js';
+import { searchDriveFiles, uploadDriveReport } from '../tools/google-drive.js';
 
 export interface AgentExecutionResult {
   outputPayload: Record<string, any>;
@@ -255,6 +256,39 @@ export async function executeAgentTask(task: TaskModel, context?: ExecutionConte
       const telemetry = await SreMetricsCollector.collectTelemetrySnapshot();
       deterministicContext = {
         deterministic_sre_telemetry: telemetry
+      };
+    }
+  } else if (task.assigned_agent_id === AgentId.AG_018) {
+    // AG-018: Google Workspace & Cloud Drive Agent
+    const query = input.search_query || input.query || task.objective;
+    const folderId = input.folder_id || input.target_folder_id;
+    const isUpload =
+      input.action === 'upload' ||
+      input.upload_content ||
+      task.objective.toLowerCase().includes('upload') ||
+      task.objective.toLowerCase().includes('salvar no drive');
+
+    if (isUpload) {
+      const fileName = input.file_name || `${task.task_code}_relatorio.md`;
+      const content = input.upload_content || input.report_markdown || `# ${task.objective}\n\nDocumento gerado pelo EI-AIOS.`;
+      const uploadRes = await uploadDriveReport({
+        fileName,
+        content,
+        parentFolderId: folderId
+      });
+      deterministicContext = {
+        deterministic_drive_upload: uploadRes
+      };
+    } else {
+      const searchRes = await searchDriveFiles({
+        query: query
+          ?.replace(/^analise o meu google drive|pesquise no drive|busque no drive|liste os materiais/gi, '')
+          .trim(),
+        folderId,
+        limit: input.limit || 30
+      });
+      deterministicContext = {
+        deterministic_drive_search: searchRes
       };
     }
   }

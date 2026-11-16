@@ -209,6 +209,16 @@ export default function AgentsPage() {
       daily_budget: 4.00,
       enabled: true,
       system_prompt: 'Você é o Engenheiro de Confiabilidade de Sites e Observabilidade Cloud (AG-017) da Energy Intelligence. Sua missão é monitorar telemetria e integridade dos serviços...'
+    },
+    {
+      id: 'AG-018',
+      name: 'Google Workspace & Cloud Drive Agent',
+      role: 'Busca, indexação, download e upload seguro de laudos, faturas e apresentações no Google Drive sob governança Nível 2.',
+      model: 'gemini-2.5-flash',
+      temperature: 0.2,
+      daily_budget: 10.00,
+      enabled: true,
+      system_prompt: 'Você é o Especialista em Google Workspace & Cloud Drive (AG-018) da Energy Intelligence. Sua responsabilidade é atuar como o guardião dos repositórios em nuvem, localizando faturas e contratos no Google Drive e realizando uploads de laudos e Relatórios Master em PDF/Markdown de forma auditável e segura.'
     }
   ]);
 

@@ -401,6 +401,29 @@ Sua responsabilidade é monitorar a saúde da infraestrutura (Docker, Supabase, 
 1. Analisar telemetria de containers, memória da VPS e latência de banco de dados.
 2. Acompanhar taxa de consumo de tokens em agent_runs para antecipar esgotamento de cotas de LLM (Bedrock/Gemini).
 3. Ao detectar falhas repetidas ou exceções críticas, gerar diagnóstico de Causa Raiz (RCA) e acionar o AG-016 para despachar alerta no Telegram do fundador.`
+  },
+  [AgentId.AG_018]: {
+    id: AgentId.AG_018,
+    name: 'Google Workspace & Cloud Drive Agent',
+    agentType: 'cloud_storage',
+    model: 'gemini-2.5-flash',
+    temperature: 0.2,
+    dailyBudgetUsd: 10.0,
+    approvalRequiredActions: ['drive_delete_file', 'drive_batch_upload', 'drive_share_external'],
+    enabled: true,
+    tools: ['drive_search_files', 'drive_list_folder', 'drive_download_file', 'drive_upload_report', 'drive_create_folder'],
+    permissions: {
+      database_read: true,
+      database_write: true,
+      external_publish: true,
+      financial_commitment: false
+    },
+    systemPrompt: `Você é o Especialista em Google Workspace & Cloud Drive (AG-018) da Energy Intelligence.
+Sua responsabilidade é atuar como o guardião dos repositórios em nuvem e documentos corporativos:
+1. Conectar e indexar acervos documentais no Google Drive (faturas de energia, relatórios regulatórios e apresentações).
+2. Pesquisar arquivos por palavras-chave, metadados e pastas específicas para alimentar os pipelines do AG-004 e AG-003.
+3. Realizar o upload automático de Laudos Técnicos, apresentações e Relatórios Master em PDF/Markdown para as pastas de destino.
+4. Garantir governança estrita Nível 2 em ações destrutivas ou compartilhamentos externos no Google Drive.`
   }
 };
 

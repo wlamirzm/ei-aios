@@ -36,6 +36,12 @@ import {
 import nodemailer from 'nodemailer';
 import { encryptSecret, decryptSecret } from '../config/crypto-vault.js';
 import {
+  getDriveStatus,
+  saveDriveServiceAccount,
+  searchDriveFiles,
+  uploadDriveReport
+} from '../tools/google-drive.js';
+import {
   requireFounderAuth,
   createFounderAuthToken,
   verifyFounderAuthToken
@@ -128,7 +134,7 @@ apiRouter.post('/api/v1/objectives', async (req: Request, res: Response, next: N
     });
 
     // Aciona ciclo imediato do worker em background para iniciar execução das subtarefas
-    autonomousWorker.triggerCycle().catch(() => {});
+    autonomousWorker.triggerCycle().catch(() => { });
 
     res.status(201).json({
       success: true,
@@ -305,7 +311,7 @@ apiRouter.post('/api/v1/approvals/:id/decide', async (req: Request, res: Respons
       }
 
       // Dispara ciclo do worker para processar tarefas destravadas imediatamente
-      autonomousWorker.triggerCycle().catch(() => {});
+      autonomousWorker.triggerCycle().catch(() => { });
 
       res.json({ success: true, status: 'approved', taskId });
     } else {
@@ -373,7 +379,7 @@ apiRouter.get('/api/v1/metrics/finops', async (_req: Request, res: Response, nex
     // 3. Métricas de FinOps e Gastos de Tokens a partir de agent_runs
     const today = new Date().toISOString().split('T')[0];
     const { data: allRuns } = await supabase.from('agent_runs').select('*');
-    
+
     const runsList = allRuns || [];
     const totalRunsCount = runsList.length;
     const totalSpendUsd = runsList.reduce((sum, r) => sum + Number(r.cost_estimate || 0), 0);
@@ -1285,7 +1291,7 @@ apiRouter.post('/api/v1/emails/messages/:id/execute-next-step', async (req: Requ
 // ------------------------------------------------------------------------------
 // POST /api/v1/emails/send (Disparo de E-mail via SMTP Gmail ou HostGator)
 // ------------------------------------------------------------------------------
-apiRouter.post('/api/v1/emails/send', async (req: Request, res: Response, _next: NextFunction) => {
+apiRouter.post('/api/v1/emails/send', async (req: Request, res: Response) => {
   try {
     const {
       accountId,
@@ -1389,6 +1395,65 @@ apiRouter.post('/api/v1/emails/send', async (req: Request, res: Response, _next:
     res.status(500).json({
       error: `Falha no envio de e-mail via SMTP: ${err?.message || err}`
     });
+  }
+});
+
+// ------------------------------------------------------------------------------
+// ROTAS GOOGLE DRIVE / WORKSPACE (AG-018)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/drive/status', async (_req: Request, res: Response) => {
+  try {
+    const status = await getDriveStatus();
+    res.json({ success: true, ...status });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Falha ao consultar status do Google Drive' });
+  }
+});
+
+apiRouter.post('/api/v1/drive/config', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const { serviceAccountJson, defaultFolderId, reportsFolderId } = req.body || {};
+    if (!serviceAccountJson) {
+      res.status(400).json({ error: 'O JSON da Service Account é obrigatório.' });
+      return;
+    }
+    const result = await saveDriveServiceAccount({
+      serviceAccountJson,
+      defaultFolderId,
+      reportsFolderId
+    });
+    res.json(result);
+  } catch (err: any) {
+    res.status(400).json({ error: err?.message || 'Erro ao salvar configuração do Google Drive' });
+  }
+});
+
+apiRouter.post('/api/v1/drive/search', async (req: Request, res: Response) => {
+  try {
+    const { query, folderId, mimeType, limit } = req.body || {};
+    const result = await searchDriveFiles({ query, folderId, mimeType, limit });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Falha ao buscar arquivos no Google Drive' });
+  }
+});
+
+apiRouter.post('/api/v1/drive/upload', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const { fileName, content, mimeType, parentFolderId } = req.body || {};
+    if (!fileName || !content) {
+      res.status(400).json({ error: 'fileName e content são obrigatórios para upload.' });
+      return;
+    }
+    const result = await uploadDriveReport({
+      fileName,
+      content,
+      mimeType: mimeType || 'text/markdown',
+      parentFolderId
+    });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Falha ao fazer upload para o Google Drive' });
   }
 });
 
