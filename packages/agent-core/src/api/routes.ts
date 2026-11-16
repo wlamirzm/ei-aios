@@ -617,6 +617,63 @@ apiRouter.post('/api/v1/agents/:id/chat', async (req: Request, res: Response, ne
 
     const model = agent.configuration?.model || (agentId === 'AG-001' || agentId === 'AG-003' ? 'claude-sonnet-5-5' : 'claude-haiku-5-5');
 
+    // Se for AG-016 e o usuário solicitar envio de mensagem para o Telegram
+    const lowerMsg = message.toLowerCase();
+    const isTelegramSendRequest =
+      lowerMsg.includes('envie essa mensagem para o meu telegram') ||
+      lowerMsg.includes('envia no telegram') ||
+      lowerMsg.includes('manda no telegram') ||
+      lowerMsg.includes('mande no telegram') ||
+      lowerMsg.includes('enviar para o telegram') ||
+      lowerMsg.includes('envie para o meu telegram') ||
+      lowerMsg.includes('notifica no telegram');
+
+    if (agentId === 'AG-016' && isTelegramSendRequest) {
+      const { telegramConcierge } = await import('../tools/telegram-concierge.js');
+      const creds = await telegramConcierge.resolveCredentials();
+
+      if (!creds.botToken || !creds.adminChatId) {
+        res.json({
+          success: true,
+          agentId,
+          agentName: agent.name,
+          reply: `⚠️ **O Bot do Telegram ainda não foi configurado na plataforma.**\n\nPara que eu possa disparar notificações push diretamente para o seu Telegram, informe o seu **Bot Token** (obtido via @BotFather) e o seu **Chat ID** (obtido via @userinfobot) através do botão **"Conectar Telegram"** no Cockpit Web.\n\nAssim que configurado, qualquer mensagem ou briefing poderá ser entregue no seu Telegram instantaneamente!`,
+          tokensUsed: 120,
+          costEstimateUsd: 0.00001
+        });
+        return;
+      }
+
+      // Procura o texto a ser enviado no history ou no texto da requisição
+      let textToSend = message;
+      if (Array.isArray(history) && history.length > 0) {
+        const lastAssistantMsg = [...history].reverse().find((h: any) => h.role === 'model' || h.role === 'assistant');
+        if (lastAssistantMsg && lastAssistantMsg.text) {
+          textToSend = lastAssistantMsg.text;
+        }
+      }
+
+      const cleanText = textToSend
+        .replace(/envie essa mensagem para o meu telegram.*/gi, '')
+        .trim() || textToSend;
+
+      const sent = await telegramConcierge.sendMessage({
+        text: `📱 *[Briefing Executivo AG-016]*\n\n${cleanText}`
+      });
+
+      if (sent) {
+        res.json({
+          success: true,
+          agentId,
+          agentName: agent.name,
+          reply: `✅ **Mensagem enviada com sucesso para o seu Telegram!**\n\nDisparei o briefing executivo como notificação push para o seu aplicativo. Confira no seu Telegram!\n\n_Caso deseje enviar novos comandos ou consultar status, pode interagir diretamente comigo por lá também via /status ou enviando novos objetivos para o AG-001._`,
+          tokensUsed: 150,
+          costEstimateUsd: 0.00001
+        });
+        return;
+      }
+    }
+
     const result = await llmService.chatWithAgent({
       agentId,
       systemInstruction: agent.system_prompt,
@@ -1782,5 +1839,60 @@ apiRouter.post('/api/v1/telegram/webhook', async (req: Request, res: Response) =
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+// ------------------------------------------------------------------------------
+// TELEGRAM MANAGEMENT API (AG-016)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/telegram/status', async (_req: Request, res: Response) => {
+  try {
+    const { telegramConcierge } = await import('../tools/telegram-concierge.js');
+    const status = await telegramConcierge.getStatus();
+    res.json({ success: true, ...status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao consultar status do Telegram' });
+  }
+});
+
+apiRouter.post('/api/v1/telegram/config', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const { botToken, adminChatId, webhookUrl } = req.body || {};
+    if (!botToken || !adminChatId) {
+      res.status(400).json({ error: 'botToken e adminChatId são obrigatórios.' });
+      return;
+    }
+    const { telegramConcierge } = await import('../tools/telegram-concierge.js');
+    const result = await telegramConcierge.saveConfig({
+      botToken,
+      adminChatId,
+      webhookUrl
+    });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message || 'Erro ao salvar configuração do Telegram' });
+  }
+});
+
+apiRouter.post('/api/v1/telegram/send', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const { text, chatId } = req.body || {};
+    if (!text) {
+      res.status(400).json({ error: 'Texto da mensagem é obrigatório.' });
+      return;
+    }
+    const { telegramConcierge } = await import('../tools/telegram-concierge.js');
+    const sent = await telegramConcierge.sendMessage({
+      chatId,
+      text
+    });
+    if (!sent) {
+      res.status(500).json({ success: false, error: 'Falha ao enviar mensagem pelo bot do Telegram.' });
+      return;
+    }
+    res.json({ success: true, message: 'Mensagem enviada com sucesso ao Telegram.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao enviar mensagem para o Telegram' });
+  }
+});
+
 
 

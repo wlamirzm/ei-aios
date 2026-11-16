@@ -15,9 +15,21 @@ import {
   Trash2,
   Sparkles,
   Loader2,
-  KeyRound
+  KeyRound,
+  Smartphone,
+  ExternalLink
 } from 'lucide-react';
-import { chatWithAgent, cleanDatabase, fetchAgents, fetchLlmStatus, setLlmApiKey, updateAgentConfig } from '@/lib/api-client';
+import {
+  chatWithAgent,
+  cleanDatabase,
+  fetchAgents,
+  fetchLlmStatus,
+  setLlmApiKey,
+  updateAgentConfig,
+  fetchTelegramStatus,
+  configureTelegram,
+  sendTelegramMessage
+} from '@/lib/api-client';
 import { CorporateMarkdown } from '@/components/ExecutiveDeliverableView';
 
 interface AgentCard {
@@ -229,6 +241,14 @@ export default function AgentsPage() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [savingKey, setSavingKey] = useState(false);
 
+  // Estado da Conexão com o Telegram (AG-016)
+  const [telegramStatus, setTelegramStatus] = useState<any>(null);
+  const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
+  const [telegramBotToken, setTelegramBotToken] = useState('');
+  const [telegramChatId, setTelegramChatId] = useState('');
+  const [isSavingTelegram, setIsSavingTelegram] = useState(false);
+  const [telegramFeedback, setTelegramFeedback] = useState<string | null>(null);
+
   // Estado do Chat Drawer
   const [activeChatAgent, setActiveChatAgent] = useState<AgentCard | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -240,6 +260,13 @@ export default function AgentsPage() {
       .then((res) => {
         setLlmStatus(res);
         setLlmConfigured(Boolean(res?.configured));
+      })
+      .catch(() => {});
+
+    fetchTelegramStatus()
+      .then((res) => {
+        setTelegramStatus(res);
+        if (res?.adminChatId) setTelegramChatId(res.adminChatId);
       })
       .catch(() => {});
 
@@ -276,6 +303,31 @@ export default function AgentsPage() {
       alert(`Erro ao salvar chave Gemini: ${err.message}`);
     } finally {
       setSavingKey(false);
+    }
+  };
+
+  const handleSaveTelegram = async () => {
+    if (!telegramBotToken.trim() || !telegramChatId.trim()) {
+      alert('Preencha o Bot Token e o Chat ID.');
+      return;
+    }
+    setIsSavingTelegram(true);
+    setTelegramFeedback(null);
+    try {
+      const res = await configureTelegram({
+        botToken: telegramBotToken.trim(),
+        adminChatId: telegramChatId.trim()
+      });
+      setTelegramFeedback(`✅ Telegram conectado com sucesso ao bot @${res.botUsername}! Uma mensagem de boas-vindas foi disparada no seu Telegram.`);
+      fetchTelegramStatus().then((s) => setTelegramStatus(s)).catch(() => {});
+      setTimeout(() => {
+        setIsTelegramModalOpen(false);
+        setTelegramFeedback(null);
+      }, 4000);
+    } catch (err: any) {
+      setTelegramFeedback(`❌ Erro: ${err.message || 'Falha ao conectar Telegram'}`);
+    } finally {
+      setIsSavingTelegram(false);
     }
   };
 
@@ -458,7 +510,44 @@ export default function AgentsPage() {
         </div>
       </div>
 
-      {/* GRADE DOS 11 AGENTES */}
+      {/* CONEXÃO TELEGRAM (AG-016) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg border ${telegramStatus?.configured ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+            <Smartphone className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-white">Telegram Concierge & HITL (AG-016):</span>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                telegramStatus?.configured
+                  ? 'bg-sky-950/60 border-sky-500/40 text-sky-300'
+                  : 'bg-slate-950/60 border-slate-700 text-slate-400'
+              }`}>
+                {telegramStatus?.configured ? `🟢 CONECTADO (@${telegramStatus.botUsername || 'bot'})` : '⚪ DESCONECTADO'}
+              </span>
+              {telegramStatus?.adminChatId && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                  Chat ID: {telegramStatus.adminChatId}
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Receba aprovações Nível 2 (HITL) com botões inline, alertas críticos de SRE e envie comandos ao AG-001 direto do seu smartphone.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => setIsTelegramModalOpen(true)}
+          className="bg-sky-600 hover:bg-sky-500 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition shadow-sm shrink-0 cursor-pointer"
+        >
+          <Smartphone className="w-3.5 h-3.5" />
+          <span>{telegramStatus?.configured ? 'Gerenciar Telegram' : 'Conectar Telegram (AG-016)'}</span>
+        </button>
+      </div>
+
+      {/* GRADE DOS AGENTES */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {agents.map((agent) => (
           <div key={agent.id} className="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col justify-between space-y-4 shadow-lg hover:border-slate-700 transition">
@@ -632,7 +721,37 @@ export default function AgentsPage() {
                       </div>
                     </div>
                   )}
-                  {msg.tokensUsed !== undefined && (
+                  {msg.role !== 'user' && (
+                    <div className="flex items-center gap-3 mt-1 px-1">
+                      {msg.tokensUsed !== undefined && (
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {msg.tokensUsed} tokens • ${msg.costUsd?.toFixed(5)} USD
+                        </span>
+                      )}
+                      <button
+                        onClick={async () => {
+                          if (!telegramStatus?.configured) {
+                            setIsTelegramModalOpen(true);
+                            return;
+                          }
+                          try {
+                            await sendTelegramMessage({
+                              text: `📱 *[Briefing ${activeChatAgent.id} - ${activeChatAgent.name}]*\n\n${msg.text}`
+                            });
+                            alert('Mensagem enviada com sucesso para o seu Telegram!');
+                          } catch (err: any) {
+                            alert(err.message || 'Falha ao despachar para o Telegram');
+                          }
+                        }}
+                        className="text-[10px] text-sky-400 hover:text-sky-300 flex items-center gap-1 transition cursor-pointer"
+                        title="Enviar este briefing direto para o seu aplicativo Telegram"
+                      >
+                        <Smartphone className="w-3 h-3" />
+                        <span>{telegramStatus?.configured ? 'Enviar para meu Telegram' : 'Conectar Telegram para receber'}</span>
+                      </button>
+                    </div>
+                  )}
+                  {msg.role === 'user' && msg.tokensUsed !== undefined && (
                     <span className="text-[10px] text-slate-500 font-mono mt-1 px-1">
                       {msg.tokensUsed} tokens • ${msg.costUsd?.toFixed(5)} USD
                     </span>
@@ -668,6 +787,104 @@ export default function AgentsPage() {
                   <Send className="w-4 h-4" />
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIGURAÇÃO TELEGRAM (AG-016) */}
+      {isTelegramModalOpen && (
+        <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in-50 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Conectar Telegram (AG-016)</h3>
+                  <p className="text-xs text-slate-400">Mobile Concierge, Aprovações HITL e Alertas SRE</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsTelegramModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs text-slate-300">
+              <div className="p-3 bg-sky-950/40 border border-sky-500/30 rounded-xl space-y-1.5 text-[11px] leading-relaxed">
+                <p className="font-bold text-sky-300">Como obter suas credenciais em 1 minuto:</p>
+                <p>1. Abra o <strong className="text-white">@BotFather</strong> no Telegram, digite <code className="text-sky-300 font-mono">/newbot</code> e copie o <strong className="text-white">HTTP API Token</strong>.</p>
+                <p>2. Abra o <strong className="text-white">@userinfobot</strong> no Telegram, digite <code className="text-sky-300 font-mono">/start</code> e copie o seu <strong className="text-white">Id</strong> numérico.</p>
+                <p>3. Inicie uma conversa com seu novo bot (<code className="text-sky-300 font-mono">/start</code>) para autorizá-lo a enviar mensagens para você.</p>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                  Bot Token (HTTP API Token do @BotFather):
+                </label>
+                <input
+                  type="password"
+                  placeholder="Ex: 7123456789:AAFnB_cx9..."
+                  value={telegramBotToken}
+                  onChange={(e) => setTelegramBotToken(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                  Seu Chat ID Numérico (obtido no @userinfobot):
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: 123456789"
+                  value={telegramChatId}
+                  onChange={(e) => setTelegramChatId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white placeholder-slate-600 focus:outline-none focus:border-sky-500 font-mono text-xs"
+                />
+              </div>
+
+              {telegramFeedback && (
+                <div
+                  className={`p-3 rounded-lg text-xs font-mono leading-relaxed ${
+                    telegramFeedback.startsWith('✅')
+                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-500/10 border border-rose-500/30 text-rose-300'
+                  }`}
+                >
+                  {telegramFeedback}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setIsTelegramModalOpen(false)}
+                className="px-4 py-2 rounded-lg border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white text-xs font-semibold transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSaveTelegram}
+                disabled={isSavingTelegram}
+                className="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-2 transition shadow-md cursor-pointer"
+              >
+                {isSavingTelegram ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Conectando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Smartphone className="w-3.5 h-3.5" />
+                    <span>Salvar e Disparar Teste</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

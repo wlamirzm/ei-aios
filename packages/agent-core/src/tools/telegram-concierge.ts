@@ -6,9 +6,20 @@ import { env } from '../config/env.js';
 import { supabase } from '../config/supabase.js';
 import { TaskStatus } from '@ei-aios/shared';
 import { orchestrator } from '../engine/orchestrator.js';
+import { encryptSecret, decryptSecret } from '../config/crypto-vault.js';
+
+export interface TelegramConfigStatus {
+  configured: boolean;
+  botUsername?: string;
+  adminChatId?: string;
+  status: string;
+  lastWebhookStatus?: string;
+  lastTestedAt?: string;
+  source: 'database' | 'env' | 'none';
+}
 
 export interface TelegramMessagePayload {
-  chatId: string | number;
+  chatId?: string | number;
   text: string;
   parseMode?: 'Markdown' | 'HTML';
   inlineKeyboard?: Array<Array<{ text: string; callbackData: string }>>;
@@ -41,14 +52,154 @@ export class TelegramConciergeService {
     this.adminChatId = env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID || null;
   }
 
+  /**
+   * Resolve credenciais priorizando a tabela `telegram_configs` no banco,
+   * com fallback para variáveis de ambiente.
+   */
+  async resolveCredentials(): Promise<{ botToken: string | null; adminChatId: string | null }> {
+    try {
+      const { data } = await supabase
+        .from('telegram_configs')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (data?.bot_token_secret && data?.admin_chat_id) {
+        try {
+          this.botToken = decryptSecret(data.bot_token_secret);
+        } catch {
+          this.botToken = data.bot_token_secret;
+        }
+        this.adminChatId = data.admin_chat_id;
+        return { botToken: this.botToken, adminChatId: this.adminChatId };
+      }
+    } catch {
+      // ignore
+    }
+
+    this.botToken = env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || null;
+    this.adminChatId = env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID || null;
+    return { botToken: this.botToken, adminChatId: this.adminChatId };
+  }
+
   isConfigured(): boolean {
     return Boolean(this.botToken && this.adminChatId);
+  }
+
+  /**
+   * Salva configurações do bot, registra webhook e dispara teste de handshake
+   */
+  async saveConfig(params: {
+    botToken: string;
+    adminChatId: string;
+    webhookUrl?: string;
+  }): Promise<{ success: boolean; botUsername: string }> {
+    const token = params.botToken.trim();
+    const chatId = params.adminChatId.trim();
+
+    // 1. Testa token no Telegram API (getMe)
+    const getMeRes = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const getMeJson = (await getMeRes.json()) as any;
+    if (!getMeJson.ok || !getMeJson.result?.username) {
+      throw new Error('Token do Telegram inválido ou não reconhecido pelo Telegram API.');
+    }
+    const botUsername = getMeJson.result.username;
+
+    // 2. Configura Webhook automaticamente
+    const defaultWebhook = 'https://api.eiaios.atendezen.com.br/api/v1/telegram/webhook';
+    const targetWebhook = params.webhookUrl || defaultWebhook;
+    let webhookStatus = 'ok';
+    try {
+      const setHookRes = await fetch(
+        `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(targetWebhook)}`
+      );
+      const setHookJson = (await setHookRes.json()) as any;
+      webhookStatus = setHookJson.description || (setHookJson.ok ? 'Webhook configurado' : 'Falha');
+    } catch (err: any) {
+      webhookStatus = `Erro: ${err.message}`;
+    }
+
+    // 3. Criptografa e salva no Supabase
+    const encryptedToken = encryptSecret(token);
+    await supabase.from('telegram_configs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const { error: dbErr } = await supabase.from('telegram_configs').insert({
+      bot_token_secret: encryptedToken,
+      admin_chat_id: chatId,
+      bot_username: botUsername,
+      status: 'connected',
+      last_webhook_status: webhookStatus,
+      last_tested_at: new Date().toISOString()
+    });
+
+    if (dbErr) {
+      throw new Error(`Erro ao salvar no banco de dados: ${dbErr.message}`);
+    }
+
+    this.botToken = token;
+    this.adminChatId = chatId;
+
+    // 4. Dispara mensagem de teste no chat do fundador
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `⚡ *[EI-AIOS] Conexão com AG-016 Concluída!*\n\nOlá, Fundador! O AG-016 (Telegram Mobile Concierge) está oficialmente vinculado ao seu perfil.\n\n• *Bot:* @${botUsername}\n• *Webhook:* ${targetWebhook}\n\nA partir de agora você receberá aprovações Nível 2 e alertas críticos por aqui, e pode digitar instruções diretas para o AG-001 planejar!`,
+          parse_mode: 'Markdown'
+        })
+      });
+    } catch {
+      // ignore
+    }
+
+    return { success: true, botUsername };
+  }
+
+  /**
+   * Consulta o status da conexão com o Telegram
+   */
+  async getStatus(): Promise<TelegramConfigStatus> {
+    const creds = await this.resolveCredentials();
+    if (!creds.botToken || !creds.adminChatId) {
+      return {
+        configured: false,
+        status: 'unconfigured',
+        source: 'none'
+      };
+    }
+
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${creds.botToken}/getMe`);
+      const json = (await res.json()) as any;
+      if (json.ok) {
+        return {
+          configured: true,
+          botUsername: json.result?.username,
+          adminChatId: creds.adminChatId,
+          status: 'connected',
+          source: 'database'
+        };
+      }
+    } catch {
+      // ignore
+    }
+
+    return {
+      configured: true,
+      adminChatId: creds.adminChatId,
+      status: 'error_verifying',
+      source: 'database'
+    };
   }
 
   /**
    * Envia uma mensagem formatada com botões inline diretamente para o Telegram do fundador
    */
   async sendMessage(payload: TelegramMessagePayload): Promise<boolean> {
+    await this.resolveCredentials();
+
     if (!this.botToken) {
       console.warn('[TelegramConcierge] Bot token not configured. Skipping message.');
       return false;

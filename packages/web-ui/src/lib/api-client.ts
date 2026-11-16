@@ -409,6 +409,48 @@ export async function uploadArtifactToDrive(payload: {
 }
 
 // ---------------------------------------------------------------------------
+// TELEGRAM CONCIERGE & HITL (AG-016)
+// ---------------------------------------------------------------------------
+
+export async function fetchTelegramStatus() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/telegram/status`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(false)
+  });
+  if (!res.ok) throw new Error('Falha ao obter status do Telegram');
+  return res.json();
+}
+
+export async function configureTelegram(payload: {
+  botToken: string;
+  adminChatId: string;
+  webhookUrl?: string;
+}) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/telegram/config`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao conectar Telegram Bot');
+  return data;
+}
+
+export async function sendTelegramMessage(payload: {
+  text: string;
+  chatId?: string;
+}) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/telegram/send`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao enviar mensagem pelo Telegram');
+  return data;
+}
+
+// ---------------------------------------------------------------------------
 // CLIENT FLOW: Consumer Units & Diagnostic Reports
 // ---------------------------------------------------------------------------
 
