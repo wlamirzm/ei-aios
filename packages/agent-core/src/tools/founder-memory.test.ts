@@ -102,4 +102,24 @@ describe('Segundo Cérebro — Memória Episódica & Motor RAG (Fase 1)', () => 
       'Fee saudável deve ter pontuação de negócio superior a fee defasado'
     );
   });
+
+  it('dispatchApprovedSuggestionExecution gera código SB- e enfileira execução para agente alvo', async () => {
+    const mockSuggestion: any = {
+      id: 'sug-test-001',
+      title: 'Follow-up Comercial Cemig',
+      context_summary: 'Cliente Grupo A4 aguardando retorno',
+      action_type: 'SEND_PROSPECT_FOLLOWUP',
+      target_agent_id: 'AG-007',
+      priority: 'P1',
+      action_payload: {
+        draftText: 'Prezado diretor, podemos agendar 10 min na quinta?'
+      }
+    };
+
+    const dispatched = await founderMemory.dispatchApprovedSuggestionExecution(mockSuggestion);
+
+    assert.match(dispatched.taskCode, /^SB-\d{6}$/);
+    assert.equal(dispatched.assignedAgentId, 'AG-007');
+    assert.ok(['queued', 'queued_offline'].includes(dispatched.status));
+  });
 });

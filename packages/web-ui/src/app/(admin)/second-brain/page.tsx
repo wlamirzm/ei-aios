@@ -117,9 +117,12 @@ export default function SecondBrainCockpitPage() {
   const handleAccept = async (item: SuggestionItem) => {
     setBusyAction(item.id);
     try {
-      await acceptSecondBrainSuggestion(item.id);
+      const res = await acceptSecondBrainSuggestion(item.id);
       setSuggestions(prev => prev.filter(s => s.id !== item.id));
-      showNotice('ok', `Sugestão "${item.title}" aprovada e incorporada ao RAG do fundador!`);
+      const codeMsg = res.executionTask?.taskCode
+        ? ` Tarefa ${res.executionTask.taskCode} enfileirada no Autonomous Worker.`
+        : '';
+      showNotice('ok', `Sugestão "${item.title}" aprovada e incorporada ao RAG.${codeMsg}`);
     } catch (err: any) {
       showNotice('err', err.message || 'Falha ao aprovar');
     } finally {
@@ -139,10 +142,13 @@ export default function SecondBrainCockpitPage() {
     if (!editingItem) return;
     setBusyAction(editingItem.id);
     try {
-      await editSecondBrainSuggestion(editingItem.id, editContent, editFeedback);
+      const res = await editSecondBrainSuggestion(editingItem.id, editContent, editFeedback);
       setSuggestions(prev => prev.filter(s => s.id !== editingItem.id));
       setEditingItem(null);
-      showNotice('ok', 'Ajuste salvo! O Segundo Cérebro aprendeu com sua edição.');
+      const codeMsg = res.executionTask?.taskCode
+        ? ` Execução ${res.executionTask.taskCode} enfileirada.`
+        : '';
+      showNotice('ok', `Ajuste salvo no RAG!${codeMsg}`);
     } catch (err: any) {
       showNotice('err', err.message || 'Falha ao salvar ajuste');
     } finally {

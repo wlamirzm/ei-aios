@@ -1943,7 +1943,14 @@ apiRouter.post('/api/v1/second-brain/suggestions/:id/accept', requireFounderAuth
       appliedHeuristics: suggestion.score_breakdown
     });
 
-    res.json({ success: true, log, message: 'Sugestão aprovada e incorporada à memória do fundador.' });
+    const executionTask = await founderMemory.dispatchApprovedSuggestionExecution(suggestion as any);
+
+    res.json({
+      success: true,
+      log,
+      executionTask,
+      message: `Sugestão aprovada, incorporada ao RAG e enfileirada (${executionTask.taskCode}).`
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Erro ao aprovar sugestão' });
   }
@@ -1966,6 +1973,9 @@ apiRouter.post('/api/v1/second-brain/suggestions/:id/edit', requireFounderAuth, 
       return;
     }
 
+    const finalContentStr =
+      typeof editedContent === 'string' ? editedContent : JSON.stringify(editedContent);
+
     const log = await founderMemory.recordActionAndLearn({
       suggestionId: id,
       agentId: suggestion.target_agent_id as string,
@@ -1974,13 +1984,23 @@ apiRouter.post('/api/v1/second-brain/suggestions/:id/edit', requireFounderAuth, 
       targetEntityType: suggestion.target_entity_type,
       targetEntityId: suggestion.target_entity_id,
       originalProposal: JSON.stringify(suggestion.action_payload),
-      finalExecutedContent: typeof editedContent === 'string' ? editedContent : JSON.stringify(editedContent),
+      finalExecutedContent: finalContentStr,
       reasoningFeedback,
       executionChannel: 'web_cockpit',
       appliedHeuristics: suggestion.score_breakdown
     });
 
-    res.json({ success: true, log, message: 'Ajuste salvo e novo precedente vetorial gravado.' });
+    const executionTask = await founderMemory.dispatchApprovedSuggestionExecution(
+      suggestion as any,
+      finalContentStr
+    );
+
+    res.json({
+      success: true,
+      log,
+      executionTask,
+      message: `Ajuste salvo no RAG e execução enfileirada (${executionTask.taskCode}).`
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Erro ao salvar ajuste' });
   }
@@ -2051,6 +2071,16 @@ apiRouter.get('/api/v1/second-brain/scheduler/status', requireFounderAuth, async
     res.json({ success: true, status });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || 'Erro ao obter status do scheduler' });
+  }
+});
+
+apiRouter.get('/api/v1/second-brain/scheduler/briefing', requireFounderAuth, async (_req: Request, res: Response) => {
+  try {
+    const { proactiveScheduler } = await import('../tools/proactive-scheduler.js');
+    const result = await proactiveScheduler.generateMorningBriefing({ sendTelegram: false });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao gerar visualização do briefing matinal' });
   }
 });
 

@@ -585,6 +585,60 @@ export class FounderMemoryService {
 
     return (data || []) as PredictiveSuggestion[];
   }
+
+  /**
+   * Opção A: Fecha o loop de execução criando uma tarefa imediata na fila do AutonomousWorker
+   * quando o fundador aprova ou ajusta uma sugestão preditiva (Zero-Risk HITL liberado).
+   */
+  async dispatchApprovedSuggestionExecution(
+    suggestion: PredictiveSuggestion,
+    finalContent?: string
+  ): Promise<{
+    taskId?: string;
+    taskCode: string;
+    assignedAgentId: string;
+    status: string;
+  }> {
+    const taskCode = `SB-${Date.now().toString().slice(-6)}`;
+    const assignedAgentId = suggestion.target_agent_id || 'AG-001';
+    const contentText =
+      finalContent || suggestion.action_payload?.draftText || suggestion.context_summary;
+    const objective = `[Segundo Cérebro HITL] ${suggestion.title} — ${contentText}`;
+
+    const insertRes = await withTimeout(
+      supabase
+        .from('tasks')
+        .insert({
+          task_code: taskCode,
+          created_by: 'SECOND_BRAIN_HITL',
+          assigned_agent_id: assignedAgentId,
+          objective,
+          task_type: suggestion.action_type || 'second_brain_execution',
+          priority: suggestion.priority || 'P1',
+          status: 'pending',
+          risk_level: 'LEVEL_1_SUPERVISED',
+          requires_approval: false,
+          input_payload: {
+            ...(suggestion.action_payload || {}),
+            suggestion_id: suggestion.id,
+            approved_content: contentText,
+            hitl_approved_at: new Date().toISOString()
+          }
+        })
+        .select('id')
+        .maybeSingle(),
+      1500,
+      { data: null, error: null } as any
+    );
+
+    const taskId = insertRes?.data?.id as string | undefined;
+    return {
+      taskId,
+      taskCode,
+      assignedAgentId,
+      status: taskId ? 'queued' : 'queued_offline'
+    };
+  }
 }
 
 export const founderMemory = new FounderMemoryService();

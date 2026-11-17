@@ -371,8 +371,14 @@ export class TelegramConciergeService {
         appliedHeuristics: suggestion.score_breakdown
       });
 
+      let dispatchedCode = '';
+      if (isApprove) {
+        const dispatched = await founderMemory.dispatchApprovedSuggestionExecution(suggestion as any);
+        dispatchedCode = dispatched.taskCode;
+      }
+
       const confirmMsg = isApprove
-        ? `✅ *Sugestão Aprovada!*\n\n\`${suggestion.title}\` foi autorizada e gravada na memória RAG para calibrar sugestões futuras.`
+        ? `✅ *Sugestão Aprovada & Enfileirada (${dispatchedCode})!*\n\n\`${suggestion.title}\` foi autorizada para execução pelo agente \`${suggestion.target_agent_id}\` e gravada na memória RAG.`
         : `🚫 *Sugestão Descartada.*\n\n\`${suggestion.title}\` foi descartada e registrada na memória RAG para ajuste de preferências.`;
 
       await this.sendMessage({ chatId: senderId, text: confirmMsg });

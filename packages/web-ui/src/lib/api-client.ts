@@ -566,6 +566,16 @@ export async function fetchSecondBrainSchedulerStatus() {
   return data;
 }
 
+export async function fetchSecondBrainBriefingPreview() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/scheduler/briefing`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao carregar briefing diário');
+  return data;
+}
+
 export async function triggerSecondBrainBriefing() {
   const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/scheduler/trigger-briefing`, {
     method: 'POST',
