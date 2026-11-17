@@ -558,3 +558,121 @@ export interface RealPaybackResult {
   limitation_notes: string[];
 }
 
+// ==============================================================================
+// SEGUNDO CÉREBRO & MEMÓRIA EPISÓDICA DO FUNDADOR (EI-AIOS)
+// ==============================================================================
+
+export type ActionType = 'APPROVE' | 'EDIT_AND_APPROVE' | 'REJECT' | 'DISCARD' | 'OVERRIDE';
+export type SuggestionPriority = 'P0' | 'P1' | 'P2' | 'P3';
+export type SuggestionStatus = 'pending' | 'accepted' | 'edited' | 'rejected' | 'expired';
+export type SuggestionCategory =
+  | 'email_response'
+  | 'crm_followup'
+  | 'market_opportunity'
+  | 'calendar_prep'
+  | 'tariff_optimization'
+  | 'social_post'
+  | 'governance_alert';
+
+export interface ScoreBreakdown {
+  vectorSimilarity: number;
+  businessRulesMatch: number;
+  temporalAcceptanceRate: number;
+  guardrailsViolated: string[];
+  appliedWeights: {
+    wv: number;
+    wr: number;
+    wt: number;
+  };
+  similarEpisodesCount: number;
+}
+
+export interface PredictiveSuggestion {
+  id: string;
+  persona_id?: string | null;
+  category: SuggestionCategory;
+  priority: SuggestionPriority;
+  title: string;
+  context_summary: string;
+  action_type: string;
+  target_agent_id: string;
+  target_entity_type?: string | null;
+  target_entity_id?: string | null;
+  action_payload: Record<string, any>;
+  confidence_score: number;
+  approval_probability: number;
+  score_breakdown: ScoreBreakdown;
+  dedup_fingerprint: string;
+  status: SuggestionStatus;
+  feedback_payload?: Record<string, any> | null;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FounderPersona {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  is_active: boolean;
+  risk_tolerance: 'conservative' | 'balanced' | 'growth_aggressive';
+  preferred_tone: string;
+  decision_weights: {
+    vector_similarity_weight: number;
+    business_rules_weight: number;
+    temporal_freshness_weight: number;
+    auto_approval_threshold: number;
+    review_warning_threshold: number;
+  };
+  business_heuristics: {
+    min_success_fee_percent?: number;
+    max_monthly_churn_risk_usd?: number;
+    target_distributors?: string[];
+    prohibited_claim_keywords?: string[];
+    max_daily_telegram_pushes?: number;
+    quiet_hours_start?: string;
+    quiet_hours_end?: string;
+    [key: string]: any;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FounderActionLogEntry {
+  id: string;
+  persona_id?: string | null;
+  agent_id: string;
+  action_type: ActionType;
+  task_type: string;
+  target_entity_type?: string | null;
+  target_entity_id?: string | null;
+  original_proposal: string;
+  final_executed_content?: string | null;
+  diff_summary?: {
+    charCountDelta?: number;
+    tokenCountDelta?: number;
+    similarityRatio?: number;
+    changesDetected?: string[];
+    [key: string]: any;
+  } | null;
+  reasoning_feedback?: string | null;
+  rejection_category?: string | null;
+  confidence_score: number;
+  execution_channel: string;
+  applied_heuristics?: Record<string, any>;
+  created_at: string;
+}
+
+export interface KnowledgeChunk {
+  id: string;
+  source_type: 'google_drive' | 'email' | 'regulatory_source' | 'internal_artifact';
+  source_id: string;
+  chunk_index: number;
+  content: string;
+  content_checksum: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+}
+
+

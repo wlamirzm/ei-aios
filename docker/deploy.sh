@@ -65,6 +65,7 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0014_agents_presentation_mobile_sre.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0015_agent_ag018_google_drive.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0016_telegram_configs.sql
+    docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0017_founder_second_brain.sql
 
     # Garante permissões e compatibilidade de telemetria sem conceder escrita para anon
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "
@@ -73,8 +74,18 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
       ALTER TABLE knowledge_sources DISABLE ROW LEVEL SECURITY;
       ALTER TABLE google_drive_configs ENABLE ROW LEVEL SECURITY;
       ALTER TABLE telegram_configs ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE founder_personas ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE knowledge_chunks ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE founder_action_logs ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE predictive_suggestions ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE scheduler_locks ENABLE ROW LEVEL SECURITY;
       REVOKE ALL ON TABLE google_drive_configs FROM anon;
       REVOKE ALL ON TABLE telegram_configs FROM anon;
+      REVOKE ALL ON TABLE founder_personas FROM anon;
+      REVOKE ALL ON TABLE knowledge_chunks FROM anon;
+      REVOKE ALL ON TABLE founder_action_logs FROM anon;
+      REVOKE ALL ON TABLE predictive_suggestions FROM anon;
+      REVOKE ALL ON TABLE scheduler_locks FROM anon;
       GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
       GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated, service_role, postgres;
       GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role, postgres;

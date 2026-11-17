@@ -8,6 +8,7 @@ import { env } from './config/env.js';
 import { apiRouter } from './api/routes.js';
 import { errorHandler, requestLogger } from './api/middleware.js';
 import { autonomousWorker } from './engine/worker.js';
+import { proactiveScheduler } from './tools/proactive-scheduler.js';
 
 const app = express();
 
@@ -35,14 +36,16 @@ const server = app.listen(env.PORT, () => {
   console.log(`🤖 Fast Model: ${env.GEMINI_DEFAULT_FAST_MODEL} | Reasoning: ${env.GEMINI_DEFAULT_REASONING_MODEL}`);
   console.log(`================================================================`);
 
-  // Inicia o loop contínuo do Worker Autônomo
+  // Inicia o loop contínuo do Worker Autônomo e o Proactive Scheduler do Segundo Cérebro
   autonomousWorker.start();
+  proactiveScheduler.start();
 });
 
 // Tratamento de Encerramento Gracioso (Graceful Shutdown)
 function handleShutdown(signal: string) {
   console.log(`\n[Shutdown] Received ${signal}. Stopping Worker and terminating server...`);
   autonomousWorker.stop();
+  proactiveScheduler.stop();
   server.close(() => {
     console.log('[Shutdown] Server closed gracefully.');
     process.exit(0);

@@ -59,12 +59,18 @@ export class TelegramConciergeService {
    */
   async resolveCredentials(): Promise<{ botToken: string | null; adminChatId: string | null }> {
     try {
-      const { data } = await supabase
-        .from('telegram_configs')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const dbPromise = Promise.resolve(
+        supabase
+          .from('telegram_configs')
+          .select('*')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      );
+      const timeoutPromise = new Promise<{ data: null }>((resolve) =>
+        setTimeout(() => resolve({ data: null }), 1000)
+      );
+      const { data } = await Promise.race([dbPromise, timeoutPromise]);
 
       if (data?.bot_token_secret && data?.admin_chat_id) {
         try {
@@ -279,17 +285,98 @@ export class TelegramConciergeService {
   }
 
   /**
+   * Envia cartão de sugestão preditiva do Segundo Cérebro com probabilidade e botões HITL
+   */
+  async sendSuggestionCard(suggestion: {
+    id: string;
+    title: string;
+    category: string;
+    target_agent_id: string;
+    context_summary: string;
+    approval_probability: number;
+    action_payload?: Record<string, any>;
+  }): Promise<boolean> {
+    if (!this.adminChatId || !this.botToken) {
+      await this.resolveCredentials();
+    }
+    const probPct = Math.round(Number(suggestion.approval_probability || 0) * 100);
+    const draftPreview = suggestion.action_payload?.draftText
+      ? `\n\n📝 *Rascunho Proposto:*\n_${String(suggestion.action_payload.draftText).slice(0, 350)}_`
+      : '';
+
+    const text =
+      `🧠 *SUGESTÃO DO SEGUNDO CÉREBRO* • *Probabilidade: ${probPct}%*\n\n` +
+      `⚡ *Agente:* \`${suggestion.target_agent_id}\` | *Categoria:* \`${suggestion.category}\`\n` +
+      `📌 *${suggestion.title}*\n\n` +
+      `🔍 *Contexto RAG:* ${suggestion.context_summary}${draftPreview}\n\n` +
+      `_Aprovar para executar e ensinar à base RAG ou descartar:_`;
+
+    const inlineKeyboard = [
+      [
+        { text: '✅ Aprovar', callbackData: `sb_approve:${suggestion.id}` },
+        { text: '❌ Descartar', callbackData: `sb_reject:${suggestion.id}` }
+      ]
+    ];
+
+    return await this.sendMessage({
+      chatId: this.adminChatId || '',
+      text,
+      parseMode: 'Markdown',
+      inlineKeyboard
+    });
+  }
+
+  /**
    * Processa uma decisão de aprovação ou rejeição vinda do clique do botão no Telegram
    */
   async handleCallbackQuery(callbackQuery: TelegramUpdate['callback_query']): Promise<string> {
     if (!callbackQuery || !callbackQuery.data) return 'Sem dados';
 
-    const [action, taskId] = callbackQuery.data.split(':');
+    if (!this.adminChatId || !this.botToken) {
+      await this.resolveCredentials();
+    }
+
+    const [action, targetId] = callbackQuery.data.split(':');
     const senderId = String(callbackQuery.from.id);
 
     // Validação estrita de autorização: Apenas o chat ID do fundador é autorizado (Fail-Closed)
     if (!this.adminChatId || senderId !== this.adminChatId) {
       return '⛔ Não autorizado.';
+    }
+
+    if (action === 'sb_approve' || action === 'sb_reject') {
+      const { founderMemory } = await import('./founder-memory.js');
+      const { data: suggestion } = await supabase
+        .from('predictive_suggestions')
+        .select('*')
+        .eq('id', targetId)
+        .maybeSingle();
+
+      if (!suggestion) {
+        return '❌ Sugestão não encontrada.';
+      }
+
+      const isApprove = action === 'sb_approve';
+      await founderMemory.recordActionAndLearn({
+        suggestionId: targetId,
+        agentId: suggestion.target_agent_id,
+        actionType: isApprove ? 'APPROVE' : 'REJECT',
+        taskType: suggestion.action_type,
+        targetEntityType: suggestion.target_entity_type,
+        targetEntityId: suggestion.target_entity_id,
+        originalProposal: JSON.stringify(suggestion.action_payload),
+        finalExecutedContent: isApprove ? JSON.stringify(suggestion.action_payload) : undefined,
+        reasoningFeedback: isApprove ? 'Aprovado via Telegram Concierge (1-toque)' : 'Descartado via Telegram Concierge',
+        executionChannel: 'telegram_concierge',
+        appliedHeuristics: suggestion.score_breakdown
+      });
+
+      const confirmMsg = isApprove
+        ? `✅ *Sugestão Aprovada!*\n\n\`${suggestion.title}\` foi autorizada e gravada na memória RAG para calibrar sugestões futuras.`
+        : `🚫 *Sugestão Descartada.*\n\n\`${suggestion.title}\` foi descartada e registrada na memória RAG para ajuste de preferências.`;
+
+      await this.sendMessage({ chatId: senderId, text: confirmMsg });
+      return isApprove ? 'Sugestão aprovada' : 'Sugestão descartada';
     }
 
     if (action === 'approve') {
@@ -300,7 +387,7 @@ export class TelegramConciergeService {
           requires_approval: false,
           updated_at: new Date().toISOString()
         })
-        .eq('id', taskId)
+        .eq('id', targetId)
         .select()
         .single();
 
@@ -323,7 +410,7 @@ export class TelegramConciergeService {
           status: TaskStatus.REJECTED,
           updated_at: new Date().toISOString()
         })
-        .eq('id', taskId)
+        .eq('id', targetId)
         .select()
         .single();
 
@@ -363,6 +450,8 @@ export class TelegramConciergeService {
       const welcome = `👋 *Olá, Fundador! Sou o AG-016 (Telegram Mobile Concierge).*\n\n` +
         `Estou conectado à infraestrutura do EI-AIOS e ao AI Orchestrator (AG-001).\n\n` +
         `🛠️ *Comandos Rápidos:*\n` +
+        `• \`/briefing\` — Gera e envia imediatamente o Briefing Executivo do Segundo Cérebro.\n` +
+        `• \`/sugestoes\` — Lista e despacha sugestões pendentes com probabilidade de aprovação.\n` +
         `• \`/status\` — Fila de tarefas, saúde do worker e aprovações pendentes.\n` +
         `• \`/kpis\` — FinOps, MRR recorrente e consumo acumulado de IA.\n` +
         `• \`/tarefas\` — Lista as últimas tarefas em execução.\n` +
@@ -437,6 +526,36 @@ export class TelegramConciergeService {
       const reply = `📋 *TAREFAS EM ANDAMENTO (${recentTasks.length}):*\n\n${list}`;
       await this.sendMessage({ chatId: senderId, text: reply });
       return reply;
+    }
+
+    // 4.1 Comando /briefing — Dispara Briefing Executivo do Segundo Cérebro
+    if (lower === '/briefing') {
+      const { proactiveScheduler } = await import('./proactive-scheduler.js');
+      const result = await proactiveScheduler.generateMorningBriefing({ sendTelegram: false });
+      await this.sendMessage({ chatId: senderId, text: result.briefingText });
+      return result.briefingText;
+    }
+
+    // 4.2 Comando /sugestoes ou /cerebro — Lista sugestões preditivas com botões inline HITL
+    if (lower === '/sugestoes' || lower === '/cerebro' || lower === '/sugestões') {
+      const { founderMemory } = await import('./founder-memory.js');
+      let suggestions: any[] = [];
+      try {
+        suggestions = await founderMemory.listSuggestions({ status: 'pending', limit: 3 });
+      } catch {
+        suggestions = [];
+      }
+
+      if (suggestions.length === 0) {
+        const reply = `🧠 *SEGUNDO CÉREBRO (RAG)*\n\nNenhuma sugestão pendente no momento. Você pode acionar uma varredura proativa no Cockpit Web (\`/second-brain\`).`;
+        await this.sendMessage({ chatId: senderId, text: reply });
+        return reply;
+      }
+
+      for (const s of suggestions) {
+        await this.sendSuggestionCard(s);
+      }
+      return `🧠 Enviadas ${suggestions.length} sugestão(ões) preditiva(s) com botões de validação.`;
     }
 
     // 5. Identificação de Intenção: Criação de Tarefa/Objetivo vs Conversação Concierge

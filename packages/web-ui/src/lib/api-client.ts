@@ -483,3 +483,142 @@ export async function fetchPublicReport(token: string) {
   const json = await res.json();
   return json.data || json;
 }
+
+// ---------------------------------------------------------------------------
+// SEGUNDO CÉREBRO & MEMÓRIA EPISÓDICA (COCKPIT API)
+// ---------------------------------------------------------------------------
+
+export async function fetchSecondBrainSuggestions(status?: string) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : '';
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/suggestions${qs}`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao carregar sugestões do Segundo Cérebro');
+  return data;
+}
+
+export async function acceptSecondBrainSuggestion(id: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/suggestions/${id}/accept`, {
+    method: 'POST',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao aprovar sugestão');
+  return data;
+}
+
+export async function editSecondBrainSuggestion(
+  id: string,
+  editedContent: string,
+  reasoningFeedback?: string
+) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/suggestions/${id}/edit`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ editedContent, reasoningFeedback })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao salvar ajuste da sugestão');
+  return data;
+}
+
+export async function rejectSecondBrainSuggestion(id: string, reason?: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/suggestions/${id}/reject`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ reason })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao descartar sugestão');
+  return data;
+}
+
+export async function fetchActiveFounderPersona() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/personas/active`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao obter persona ativa');
+  return data;
+}
+
+export async function updateFounderPersonaWeights(id: string, weights: Record<string, number>) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/personas/${id}/weights`, {
+    method: 'PUT',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ weights })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao atualizar pesos da persona');
+  return data;
+}
+
+export async function fetchSecondBrainSchedulerStatus() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/scheduler/status`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao obter status do scheduler');
+  return data;
+}
+
+export async function triggerSecondBrainBriefing() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/scheduler/trigger-briefing`, {
+    method: 'POST',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao gerar briefing matinal');
+  return data;
+}
+
+export async function scanSecondBrainOpportunities() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/scheduler/scan`, {
+    method: 'POST',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao executar varredura proativa');
+  return data;
+}
+
+export async function startSecondBrainBootstrap() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/bootstrap/start`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ includeDrive: true, includeEmails: true })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao iniciar bootstrap RAG');
+  return data;
+}
+
+export async function createSecondBrainSocialDraft(payload: { topic: string; angle?: string }) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/social/draft`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao gerar rascunho de post para LinkedIn');
+  return data;
+}
+
+export async function generateCalendarDossier(payload: {
+  title: string;
+  companyName?: string;
+  startTime?: string;
+}) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/second-brain/calendar/dossier`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao gerar dossiê pré-reunião');
+  return data;
+}

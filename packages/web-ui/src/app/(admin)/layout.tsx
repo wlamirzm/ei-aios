@@ -10,7 +10,8 @@ import {
   BarChart3,
   RefreshCw,
   Power,
-  Mail
+  Mail,
+  Brain
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link href="/" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">
               <Zap className="w-4 h-4 text-emerald-400" />
               <span>Command Center</span>
+            </Link>
+
+            <Link href="/second-brain" className="flex items-center justify-between px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">
+              <div className="flex items-center gap-3">
+                <Brain className="w-4 h-4 text-purple-400" />
+                <span>Segundo Cérebro</span>
+              </div>
+              <span className="bg-purple-500/20 text-purple-400 border border-purple-500/30 text-[10px] px-1.5 py-0.5 rounded font-mono font-bold">RAG</span>
             </Link>
 
             <Link href="/approvals" className="flex items-center justify-between px-3 py-2.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">

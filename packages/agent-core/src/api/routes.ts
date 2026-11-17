@@ -1896,5 +1896,224 @@ apiRouter.post('/api/v1/telegram/send', requireFounderAuth, async (req: Request,
   }
 });
 
+// ------------------------------------------------------------------------------
+// SEGUNDO CÉREBRO & MEMÓRIA EPISÓDICA API
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/second-brain/suggestions', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const { status, priority, limit } = req.query;
+    const { founderMemory } = await import('../tools/founder-memory.js');
+    const suggestions = await founderMemory.listSuggestions({
+      status: status ? String(status) : undefined,
+      priority: priority ? String(priority) : undefined,
+      limit: limit ? Number(limit) : undefined
+    });
+    res.json({ success: true, suggestions });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao listar sugestões' });
+  }
+});
+
+apiRouter.post('/api/v1/second-brain/suggestions/:id/accept', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { founderMemory } = await import('../tools/founder-memory.js');
+
+    const { data: suggestion } = await supabase
+      .from('predictive_suggestions')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!suggestion) {
+      res.status(404).json({ success: false, error: 'Sugestão não encontrada.' });
+      return;
+    }
+
+    const log = await founderMemory.recordActionAndLearn({
+      suggestionId: id,
+      agentId: suggestion.target_agent_id as string,
+      actionType: 'APPROVE',
+      taskType: suggestion.action_type,
+      targetEntityType: suggestion.target_entity_type,
+      targetEntityId: suggestion.target_entity_id,
+      originalProposal: JSON.stringify(suggestion.action_payload),
+      finalExecutedContent: JSON.stringify(suggestion.action_payload),
+      executionChannel: 'web_cockpit',
+      appliedHeuristics: suggestion.score_breakdown
+    });
+
+    res.json({ success: true, log, message: 'Sugestão aprovada e incorporada à memória do fundador.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao aprovar sugestão' });
+  }
+});
+
+apiRouter.post('/api/v1/second-brain/suggestions/:id/edit', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { editedContent, reasoningFeedback } = req.body || {};
+    const { founderMemory } = await import('../tools/founder-memory.js');
+
+    const { data: suggestion } = await supabase
+      .from('predictive_suggestions')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!suggestion) {
+      res.status(404).json({ success: false, error: 'Sugestão não encontrada.' });
+      return;
+    }
+
+    const log = await founderMemory.recordActionAndLearn({
+      suggestionId: id,
+      agentId: suggestion.target_agent_id as string,
+      actionType: 'EDIT_AND_APPROVE',
+      taskType: suggestion.action_type,
+      targetEntityType: suggestion.target_entity_type,
+      targetEntityId: suggestion.target_entity_id,
+      originalProposal: JSON.stringify(suggestion.action_payload),
+      finalExecutedContent: typeof editedContent === 'string' ? editedContent : JSON.stringify(editedContent),
+      reasoningFeedback,
+      executionChannel: 'web_cockpit',
+      appliedHeuristics: suggestion.score_breakdown
+    });
+
+    res.json({ success: true, log, message: 'Ajuste salvo e novo precedente vetorial gravado.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao salvar ajuste' });
+  }
+});
+
+apiRouter.post('/api/v1/second-brain/suggestions/:id/reject', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { reason, category } = req.body || {};
+    const { founderMemory } = await import('../tools/founder-memory.js');
+
+    const { data: suggestion } = await supabase
+      .from('predictive_suggestions')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (!suggestion) {
+      res.status(404).json({ success: false, error: 'Sugestão não encontrada.' });
+      return;
+    }
+
+    const log = await founderMemory.recordActionAndLearn({
+      suggestionId: id,
+      agentId: suggestion.target_agent_id as string,
+      actionType: 'REJECT',
+      taskType: suggestion.action_type,
+      targetEntityType: suggestion.target_entity_type,
+      targetEntityId: suggestion.target_entity_id,
+      originalProposal: JSON.stringify(suggestion.action_payload),
+      reasoningFeedback: reason,
+      rejectionCategory: category,
+      executionChannel: 'web_cockpit'
+    });
+
+    res.json({ success: true, log, message: 'Sugestão descartada e motivo registrado no aprendizado.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao descartar sugestão' });
+  }
+});
+
+apiRouter.get('/api/v1/second-brain/personas/active', requireFounderAuth, async (_req: Request, res: Response) => {
+  try {
+    const { founderMemory } = await import('../tools/founder-memory.js');
+    const persona = await founderMemory.getActivePersona();
+    res.json({ success: true, persona });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao obter persona do fundador' });
+  }
+});
+
+apiRouter.put('/api/v1/second-brain/personas/:id/weights', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { weights } = req.body || {};
+    const { founderMemory } = await import('../tools/founder-memory.js');
+    const updated = await founderMemory.updatePersonaWeights(id, weights);
+    res.json({ success: true, persona: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao atualizar pesos da persona' });
+  }
+});
+
+apiRouter.get('/api/v1/second-brain/scheduler/status', requireFounderAuth, async (_req: Request, res: Response) => {
+  try {
+    const { proactiveScheduler } = await import('../tools/proactive-scheduler.js');
+    const status = await proactiveScheduler.getStatus();
+    res.json({ success: true, status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao obter status do scheduler' });
+  }
+});
+
+apiRouter.post('/api/v1/second-brain/scheduler/trigger-briefing', requireFounderAuth, async (_req: Request, res: Response) => {
+  try {
+    const { proactiveScheduler } = await import('../tools/proactive-scheduler.js');
+    const result = await proactiveScheduler.generateMorningBriefing({ sendTelegram: true });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao disparar briefing matinal' });
+  }
+});
+
+apiRouter.post('/api/v1/second-brain/scheduler/scan', requireFounderAuth, async (_req: Request, res: Response) => {
+  try {
+    const { proactiveScheduler } = await import('../tools/proactive-scheduler.js');
+    const result = await proactiveScheduler.scanAndGenerateSuggestions();
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao executar varredura proativa' });
+  }
+});
+
+apiRouter.post('/api/v1/second-brain/bootstrap/start', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const { includeDrive, includeEmails } = req.body || {};
+    const { runHistoricalBootstrap } = await import('../tools/second-brain-integrations.js');
+    const result = await runHistoricalBootstrap({ includeDrive, includeEmails });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao executar bootstrap de conhecimento' });
+  }
+});
+
+apiRouter.post('/api/v1/second-brain/calendar/dossier', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const { title, participantEmail, companyName, startTime } = req.body || {};
+    if (!title) {
+      res.status(400).json({ success: false, error: 'Título da reunião é obrigatório.' });
+      return;
+    }
+    const { generatePreMeetingDossier } = await import('../tools/second-brain-integrations.js');
+    const result = await generatePreMeetingDossier({ title, participantEmail, companyName, startTime });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao gerar dossiê pré-reunião' });
+  }
+});
+
+apiRouter.post('/api/v1/second-brain/social/draft', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const { topic, targetAudience, angle } = req.body || {};
+    if (!topic) {
+      res.status(400).json({ success: false, error: 'Tema do post é obrigatório.' });
+      return;
+    }
+    const { generateLinkedInDraft } = await import('../tools/second-brain-integrations.js');
+    const result = await generateLinkedInDraft({ topic, targetAudience, angle });
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'Erro ao gerar rascunho de post para LinkedIn' });
+  }
+});
+
 
 
