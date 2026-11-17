@@ -30,3 +30,5 @@ letsencrypt/
 acme.json
 postgres_data/
 
+
+.superpowers/
