@@ -1510,7 +1510,7 @@ apiRouter.post('/api/v1/drive/config', requireFounderAuth, async (req: Request, 
   }
 });
 
-apiRouter.post('/api/v1/drive/search', async (req: Request, res: Response) => {
+apiRouter.post('/api/v1/drive/search', requireFounderAuth, async (req: Request, res: Response) => {
   try {
     const { query, folderId, mimeType, limit } = req.body || {};
     const result = await searchDriveFiles({ query, folderId, mimeType, limit });
@@ -1845,7 +1845,7 @@ apiRouter.post('/api/v1/telegram/webhook', async (req: Request, res: Response) =
 // ------------------------------------------------------------------------------
 // TELEGRAM MANAGEMENT API (AG-016)
 // ------------------------------------------------------------------------------
-apiRouter.get('/api/v1/telegram/status', async (_req: Request, res: Response) => {
+apiRouter.get('/api/v1/telegram/status', requireFounderAuth, async (_req: Request, res: Response) => {
   try {
     const { telegramConcierge } = await import('../tools/telegram-concierge.js');
     const status = await telegramConcierge.getStatus();

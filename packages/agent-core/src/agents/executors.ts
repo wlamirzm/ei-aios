@@ -282,7 +282,7 @@ export async function executeAgentTask(task: TaskModel, context?: ExecutionConte
     } else {
       const searchRes = await searchDriveFiles({
         query: query
-          ?.replace(/^analise o meu google drive|pesquise no drive|busque no drive|liste os materiais/gi, '')
+          ?.replace(/^(?:analise o meu google drive|pesquise no drive|busque no drive|liste os materiais)/gi, '')
           .trim(),
         folderId,
         limit: input.limit || 30

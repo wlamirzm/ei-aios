@@ -79,8 +79,10 @@ export class TelegramConciergeService {
       // ignore
     }
 
-    this.botToken = env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || null;
-    this.adminChatId = env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID || null;
+    const envToken = env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || null;
+    const envChatId = env.TELEGRAM_ADMIN_CHAT_ID || process.env.TELEGRAM_ADMIN_CHAT_ID || null;
+    if (envToken) this.botToken = envToken;
+    if (envChatId) this.adminChatId = envChatId;
     return { botToken: this.botToken, adminChatId: this.adminChatId };
   }
 
@@ -178,7 +180,7 @@ export class TelegramConciergeService {
         return {
           configured: true,
           botUsername: json.result?.username,
-          adminChatId: creds.adminChatId,
+          adminChatId: creds.adminChatId ? `***${creds.adminChatId.slice(-4)}` : undefined,
           status: 'connected',
           source: 'database'
         };
@@ -189,7 +191,7 @@ export class TelegramConciergeService {
 
     return {
       configured: true,
-      adminChatId: creds.adminChatId,
+      adminChatId: creds.adminChatId ? `***${creds.adminChatId.slice(-4)}` : undefined,
       status: 'error_verifying',
       source: 'database'
     };
@@ -285,8 +287,8 @@ export class TelegramConciergeService {
     const [action, taskId] = callbackQuery.data.split(':');
     const senderId = String(callbackQuery.from.id);
 
-    // Validação estrita de autorização: Apenas o chat ID do fundador é autorizado
-    if (this.adminChatId && senderId !== this.adminChatId) {
+    // Validação estrita de autorização: Apenas o chat ID do fundador é autorizado (Fail-Closed)
+    if (!this.adminChatId || senderId !== this.adminChatId) {
       return '⛔ Não autorizado.';
     }
 
@@ -346,7 +348,8 @@ export class TelegramConciergeService {
   async handleIncomingTextMessage(senderId: string, text: string): Promise<string> {
     await this.resolveCredentials();
 
-    if (this.adminChatId && senderId !== this.adminChatId) {
+    // Validação estrita de autorização: Apenas o chat ID do fundador é autorizado (Fail-Closed)
+    if (!this.adminChatId || senderId !== this.adminChatId) {
       const msg = '⛔ *Acesso Restrito*\nEste bot é o gateway executivo exclusivo do fundador da Energy Intelligence.';
       await this.sendMessage({ chatId: senderId, text: msg });
       return msg;

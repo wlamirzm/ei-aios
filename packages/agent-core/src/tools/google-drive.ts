@@ -151,6 +151,9 @@ export async function saveDriveServiceAccount(payload: {
   const encrypted = encryptSecret(payload.serviceAccountJson);
   const email = parsed.client_email;
 
+  // Limpa configuração antiga mantendo singleton
+  await supabase.from('google_drive_configs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
   // Atualiza ou insere na tabela google_drive_configs
   const { error } = await supabase
     .from('google_drive_configs')
@@ -275,9 +278,20 @@ export async function uploadDriveReport(options: {
   mediaStream.push(options.content);
   mediaStream.push(null);
 
+  let targetFolderId = options.parentFolderId;
+  if (!targetFolderId) {
+    const { data: config } = await supabase
+      .from('google_drive_configs')
+      .select('reports_folder_id, default_folder_id')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    targetFolderId = config?.reports_folder_id || config?.default_folder_id || undefined;
+  }
+
   const fileMetadata: any = {
     name: options.fileName,
-    parents: options.parentFolderId ? [options.parentFolderId] : undefined
+    parents: targetFolderId ? [targetFolderId] : undefined
   };
 
   const res = await drive.files.create({

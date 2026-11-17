@@ -94,10 +94,16 @@ export default function ArtifactsPage() {
         url: res.webViewLink,
         name: res.name || fileName
       });
+      setTimeout(() => {
+        setDriveUploadResult(null);
+      }, 6000);
     } catch (err: any) {
       setDriveUploadResult({
         error: err.message || 'Falha ao salvar no Google Drive'
       });
+      setTimeout(() => {
+        setDriveUploadResult(null);
+      }, 8000);
     } finally {
       setIsUploadingToDrive(false);
     }

@@ -384,7 +384,7 @@ export async function searchDriveFiles(payload: {
 }) {
   const res = await fetch(`${getBaseUrl()}/api/v1/drive/search`, {
     method: 'POST',
-    headers: getAuthHeaders(false),
+    headers: getAuthHeaders(true),
     body: JSON.stringify(payload)
   });
   const data = await res.json().catch(() => ({}));
@@ -415,7 +415,7 @@ export async function uploadArtifactToDrive(payload: {
 export async function fetchTelegramStatus() {
   const res = await fetch(`${getBaseUrl()}/api/v1/telegram/status`, {
     cache: 'no-store',
-    headers: getAuthHeaders(false)
+    headers: getAuthHeaders(true)
   });
   if (!res.ok) throw new Error('Falha ao obter status do Telegram');
   return res.json();

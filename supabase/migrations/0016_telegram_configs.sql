@@ -14,6 +14,10 @@ CREATE TABLE IF NOT EXISTS telegram_configs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Permissões para service_role, authenticated e anon
-ALTER TABLE telegram_configs DISABLE ROW LEVEL SECURITY;
-GRANT ALL ON TABLE telegram_configs TO anon, authenticated, service_role, postgres;
+-- RLS restrito a service_role e authenticated (blindado contra anon)
+ALTER TABLE telegram_configs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Service and auth full access on telegram_configs" ON telegram_configs;
+CREATE POLICY "Service and auth full access on telegram_configs" ON telegram_configs
+  FOR ALL TO service_role, authenticated USING (true) WITH CHECK (true);
+REVOKE ALL ON TABLE telegram_configs FROM anon;
+GRANT ALL ON TABLE telegram_configs TO authenticated, service_role, postgres;

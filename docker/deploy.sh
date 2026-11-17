@@ -71,8 +71,10 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
       ALTER TABLE agent_runs ALTER COLUMN task_id DROP NOT NULL;
       ALTER TABLE agents DISABLE ROW LEVEL SECURITY;
       ALTER TABLE knowledge_sources DISABLE ROW LEVEL SECURITY;
-      ALTER TABLE google_drive_configs DISABLE ROW LEVEL SECURITY;
-      ALTER TABLE telegram_configs DISABLE ROW LEVEL SECURITY;
+      ALTER TABLE google_drive_configs ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE telegram_configs ENABLE ROW LEVEL SECURITY;
+      REVOKE ALL ON TABLE google_drive_configs FROM anon;
+      REVOKE ALL ON TABLE telegram_configs FROM anon;
       GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role, postgres;
       GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated, service_role, postgres;
       GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role, postgres;

@@ -18,7 +18,7 @@ describe('Telegram Concierge & HITL Gateway (AG-016)', () => {
     (service as any).adminChatId = '123456789';
 
     const response = await service.handleIncomingTextMessage('999999999', 'Listar tarefas');
-    assert.match(response, /Acesso restrito/);
+    assert.match(response, /acesso restrito/i);
   });
 
   test('handleIncomingTextMessage processa comando /status para o fundador autorizado', async () => {
