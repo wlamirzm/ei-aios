@@ -304,73 +304,8 @@ ON CONFLICT (id) DO UPDATE SET
   enabled = EXCLUDED.enabled,
   updated_at = NOW();
 
--- 2. CLIENTE PILOTO DE EXEMPLO
-INSERT INTO clients (
-  id,
-  company_name,
-  cnpj,
-  segment,
-  stage,
-  contact_name,
-  contact_email,
-  contact_phone,
-  contract_model,
-  monthly_fee_brl,
-  success_fee_percent,
-  metadata
-) VALUES (
-  'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
-  'Indústrias Metalúrgicas Alvorada S.A.',
-  '12.345.678/0001-90',
-  'Indústria Metal-Mecânica',
-  'active_saas',
-  'Carlos Eduardo Mendes (Diretor Industrial)',
-  'carlos.mendes@metalurgicaalvorada.com.br',
-  '(19) 98765-4321',
-  'saas_plus_success_fee',
-  1800.00,
-  20.00,
-  '{"notes": "Cliente piloto referência. Operação fabril 2 turnos de segunda a sexta.", "installed_capacity_kw": 600}'::jsonb
-)
-ON CONFLICT (id) DO NOTHING;
-
--- 3. UNIDADE CONSUMIDORA DA PLANTA PRINCIPAL
-INSERT INTO consumer_units (
-  id,
-  client_id,
-  uc_code,
-  unit_name,
-  distributor,
-  tariff_group,
-  tariff_modality,
-  contracted_demand_peak_kw,
-  contracted_demand_offpeak_kw,
-  is_free_market,
-  has_distributed_generation,
-  baseline_metrics
-) VALUES (
-  'b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e',
-  'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d',
-  '9876543210',
-  'Planta Industrial Paulínia',
-  'CPFL Paulista',
-  'A4',
-  'HOROSSAZONAL_VERDE',
-  250.00,
-  250.00,
-  false,
-  false,
-  '{
-    "baseline_period": "2024-01 a 2024-12",
-    "avg_monthly_consumption_kwh": 78500,
-    "avg_monthly_cost_brl": 62400.00,
-    "avg_power_factor": 0.88,
-    "contracted_demand_kw": 250
-  }'::jsonb
-)
-ON CONFLICT (id) DO NOTHING;
-
--- 4. BASE REGULATÓRIA E TABELAS TARIFÁRIAS (KNOWLEDGE SOURCES)
+-- 2. BASE REGULATÓRIA E TABELAS TARIFÁRIAS (KNOWLEDGE SOURCES)
+-- Clientes e UCs de demonstração removidos para iniciar com base real limpa.
 INSERT INTO knowledge_sources (
   source_type,
   source_name,

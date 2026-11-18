@@ -645,3 +645,54 @@ export async function generateCalendarDossier(payload: {
   if (!res.ok) throw new Error(data?.error || 'Falha ao gerar dossiê pré-reunião');
   return data;
 }
+
+// ---------------------------------------------------------------------------
+// CLIENTES & UNIDADES CONSUMIDORAS (CRUD REAL)
+// ---------------------------------------------------------------------------
+
+export async function fetchClients() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/clients`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao listar clientes');
+  return data;
+}
+
+export async function createClientRecord(payload: {
+  company_name: string;
+  cnpj?: string;
+  segment?: string;
+  stage?: string;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  monthly_fee_brl?: number;
+  success_fee_percent?: number;
+  uc_code?: string;
+  unit_name?: string;
+  distributor?: string;
+  tariff_group?: string;
+  tariff_modality?: string;
+  contracted_demand_peak_kw?: number;
+}) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/clients`, {
+    method: 'POST',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao cadastrar cliente');
+  return data;
+}
+
+export async function deleteClientRecord(id: string) {
+  const res = await fetch(`${getBaseUrl()}/api/v1/clients/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao remover cliente');
+  return data;
+}

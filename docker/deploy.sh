@@ -67,8 +67,10 @@ if [ -n "$POSTGRES_CONTAINER" ]; then
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0016_telegram_configs.sql
     docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d postgres < supabase/migrations/0017_founder_second_brain.sql
 
-    # Garante permissões e compatibilidade de telemetria sem conceder escrita para anon
+    # Garante permissões e remove cliente piloto legado de demonstração (Zero KM)
     docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -c "
+      DELETE FROM consumer_units WHERE id = 'b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e';
+      DELETE FROM clients WHERE id = 'a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d';
       ALTER TABLE agent_runs ALTER COLUMN task_id DROP NOT NULL;
       ALTER TABLE agents DISABLE ROW LEVEL SECURITY;
       ALTER TABLE knowledge_sources DISABLE ROW LEVEL SECURITY;

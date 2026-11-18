@@ -25,16 +25,16 @@ export default function FinOpsPage() {
   const [overview, setOverview] = useState<any>(null);
   const [costUsage, setCostUsage] = useState<any>(null);
   const [metrics, setMetrics] = useState<any>({
-    completion_rate_percent: 94.2,
-    qa_rework_rate_percent: 5.8,
-    avg_cost_per_task_usd: 0.00342,
-    avg_execution_time_ms: 2450,
-    approval_rate_percent: 98.0,
-    total_token_spend_usd_today: 0.42,
-    total_token_spend_usd_month: 4.85,
-    cost_per_artifact_usd: 0.048,
-    total_tasks_count: 86,
-    total_runs_count: 112,
+    completion_rate_percent: 0,
+    qa_rework_rate_percent: 0,
+    avg_cost_per_task_usd: 0,
+    avg_execution_time_ms: 0,
+    approval_rate_percent: 0,
+    total_token_spend_usd_today: 0,
+    total_token_spend_usd_month: 0,
+    cost_per_artifact_usd: 0,
+    total_tasks_count: 0,
+    total_runs_count: 0,
     cfo_unit_economics: null,
     recent_runs: []
   });

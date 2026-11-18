@@ -2238,5 +2238,124 @@ apiRouter.post('/api/v1/second-brain/social/draft', requireFounderAuth, async (r
   }
 });
 
+// ------------------------------------------------------------------------------
+// GESTÃO DE CLIENTES E UNIDADES CONSUMIDORAS (CRUD REAL)
+// ------------------------------------------------------------------------------
+apiRouter.get('/api/v1/clients', requireFounderAuth, async (_req: Request, res: Response) => {
+  try {
+    const [{ data: clientsRows, error: clientErr }, { data: unitsRows }] = await Promise.all([
+      supabase.from('clients').select('*').order('created_at', { ascending: false }),
+      supabase.from('consumer_units').select('*').order('created_at', { ascending: true })
+    ]);
+
+    if (clientErr) {
+      res.status(500).json({ success: false, error: clientErr.message });
+      return;
+    }
+
+    const clients = (clientsRows || []).map((c: any) => ({
+      ...c,
+      units: (unitsRows || []).filter((u: any) => u.client_id === c.id)
+    }));
+
+    res.json({ success: true, clients });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Erro ao listar clientes' });
+  }
+});
+
+apiRouter.post('/api/v1/clients', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const {
+      company_name,
+      cnpj,
+      segment,
+      stage,
+      contact_name,
+      contact_email,
+      contact_phone,
+      contract_model,
+      monthly_fee_brl,
+      success_fee_percent,
+      uc_code,
+      unit_name,
+      distributor,
+      tariff_group,
+      tariff_modality,
+      contracted_demand_peak_kw
+    } = req.body || {};
+
+    if (!company_name) {
+      res.status(400).json({ success: false, error: 'Nome da empresa é obrigatório.' });
+      return;
+    }
+
+    const { data: createdClient, error: cErr } = await supabase
+      .from('clients')
+      .insert({
+        company_name: String(company_name).trim(),
+        cnpj: cnpj ? String(cnpj).trim() : null,
+        segment: segment ? String(segment).trim() : 'Industrial / Corporativo',
+        stage: stage || 'lead',
+        contact_name: contact_name ? String(contact_name).trim() : null,
+        contact_email: contact_email ? String(contact_email).trim() : null,
+        contact_phone: contact_phone ? String(contact_phone).trim() : null,
+        contract_model: contract_model || 'saas_plus_success_fee',
+        monthly_fee_brl: monthly_fee_brl !== undefined ? Number(monthly_fee_brl) : 0,
+        success_fee_percent: success_fee_percent !== undefined ? Number(success_fee_percent) : 20
+      })
+      .select()
+      .single();
+
+    if (cErr || !createdClient) {
+      res.status(500).json({ success: false, error: cErr?.message || 'Erro ao cadastrar cliente' });
+      return;
+    }
+
+    let createdUnit: any = null;
+    if (uc_code && String(uc_code).trim()) {
+      const { data: ucData } = await supabase
+        .from('consumer_units')
+        .insert({
+          client_id: createdClient.id,
+          uc_code: String(uc_code).trim(),
+          unit_name: unit_name ? String(unit_name).trim() : 'Unidade Principal',
+          distributor: distributor || 'CPFL Paulista',
+          tariff_group: tariff_group || 'A4',
+          tariff_modality: tariff_modality || 'HOROSSAZONAL_VERDE',
+          contracted_demand_peak_kw: contracted_demand_peak_kw ? Number(contracted_demand_peak_kw) : 0,
+          contracted_demand_offpeak_kw: contracted_demand_peak_kw ? Number(contracted_demand_peak_kw) : 0
+        })
+        .select()
+        .maybeSingle();
+      createdUnit = ucData;
+    }
+
+    res.json({
+      success: true,
+      client: {
+        ...createdClient,
+        units: createdUnit ? [createdUnit] : []
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Erro ao cadastrar cliente' });
+  }
+});
+
+apiRouter.delete('/api/v1/clients/:id', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id as string;
+    const { error } = await supabase.from('clients').delete().eq('id', id);
+    if (error) {
+      res.status(500).json({ success: false, error: error.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Erro ao excluir cliente' });
+  }
+});
+
 
 
