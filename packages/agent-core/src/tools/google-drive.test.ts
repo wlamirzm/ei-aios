@@ -20,11 +20,12 @@ describe('Google Workspace & Cloud Drive Tool (AG-018)', () => {
     assert.ok(status.clientId);
   });
 
-  test('getDriveOAuthAuthorizeUrl gera URL de consentimento Google com o Client ID configurado', async () => {
+  test('getDriveOAuthAuthorizeUrl gera URL de consentimento Google com o Client ID e login_hint corporativo', async () => {
     const res = await getDriveOAuthAuthorizeUrl();
     assert.strictEqual(res.clientId, DEFAULT_OAUTH_CLIENT_ID);
     assert.match(res.authUrl, /accounts\.google\.com\/o\/oauth2\/v2\/auth/);
     assert.ok(res.authUrl.includes(encodeURIComponent(DEFAULT_OAUTH_CLIENT_ID)));
+    assert.ok(res.authUrl.includes('login_hint=conexper.energia%40gmail.com'));
   });
 
   test('searchDriveFiles degrada para simulação controlada sem credenciais', async () => {

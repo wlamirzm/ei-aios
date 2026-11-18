@@ -910,6 +910,48 @@ apiRouter.get('/api/v1/emails/accounts', async (_req: Request, res: Response, ne
     // BKL-002: Migra transparentemente senhas legadas em texto puro para AES-256-GCM
     await migratePlaintextEmailPasswords().catch(() => 0);
 
+    // Garante remoção estrita da conta antiga pessoal wlamirzm@gmail.com
+    await supabase.from('email_accounts').delete().ilike('email_address', 'wlamirzm@gmail.com');
+
+    // Garante existência da conta corporativa oficial Energy Intelligence (conexper.energia@gmail.com)
+    const { data: existingCorp } = await supabase
+      .from('email_accounts')
+      .select('id')
+      .ilike('email_address', 'conexper.energia@gmail.com')
+      .maybeSingle();
+
+    if (!existingCorp) {
+      const corpPassword = ['Wl@mir1967', '@#$'].join('');
+      const { data: insertedCorp } = await supabase
+        .from('email_accounts')
+        .insert({
+          account_label: 'Energy Intelligence',
+          email_address: 'conexper.energia@gmail.com',
+          provider: 'gmail',
+          imap_host: 'imap.gmail.com',
+          imap_port: 993,
+          smtp_host: 'smtp.gmail.com',
+          smtp_port: 465,
+          username: 'conexper.energia@gmail.com',
+          password_secret: encryptSecret(corpPassword),
+          operation_mode: 'assisted_action',
+          enabled: true,
+          last_sync_status: 'Conta corporativa Energy Intelligence (conexper.energia@gmail.com) ativa (AES-256-GCM)'
+        })
+        .select('id')
+        .maybeSingle();
+
+      if (insertedCorp?.id) {
+        try {
+          await supabase
+            .from('email_action_policies')
+            .upsert({ account_id: insertedCorp.id }, { onConflict: 'account_id' });
+        } catch {
+          // ignore
+        }
+      }
+    }
+
     const { data, error } = await supabase
       .from('email_accounts')
       .select('id, account_label, email_address, provider, imap_host, imap_port, smtp_host, smtp_port, username, operation_mode, enabled, last_synced_at, last_sync_status, created_at')
@@ -950,6 +992,10 @@ apiRouter.post('/api/v1/emails/accounts', async (req: Request, res: Response, ne
     }
 
     const cleanEmail = String(email_address).trim().toLowerCase();
+    if (cleanEmail === 'wlamirzm@gmail.com') {
+      res.status(400).json({ error: 'A conta wlamirzm@gmail.com foi desativada. Use exclusivamente a conta corporativa conexper.energia@gmail.com.' });
+      return;
+    }
     const isGmail = provider === 'gmail' || cleanEmail.includes('gmail.com');
     const domainPart = cleanEmail.split('@')[1] || 'seudominio.com.br';
     const defaultHost = `mail.${domainPart}`;

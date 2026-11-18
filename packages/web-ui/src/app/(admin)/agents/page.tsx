@@ -652,6 +652,9 @@ export default function AgentsPage() {
                   Client ID: {(driveStatus?.clientId || driveClientId).slice(0, 24)}...
                 </span>
               )}
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/60 text-emerald-300 border border-emerald-500/30">
+                Conta: {driveStatus?.targetAccountName || 'Energy Intelligence'} ({driveStatus?.targetAccountEmail || 'conexper.energia@gmail.com'})
+              </span>
             </div>
             <p className="text-[11px] text-slate-400 mt-0.5">
               Permite ao AG-018 e ao Bootstrap RAG ler propostas, faturas no Google Drive e consultar agenda do Google Calendar.
@@ -660,15 +663,13 @@ export default function AgentsPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {driveStatus?.status !== 'connected' && (
-            <button
-              onClick={handleLaunchGoogleOAuth}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>Autorizar Conta Google</span>
-            </button>
-          )}
+          <button
+            onClick={handleLaunchGoogleOAuth}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>{driveStatus?.status === 'connected' ? 'Reautorizar conexper.energia@gmail.com' : 'Autorizar conexper.energia@gmail.com'}</span>
+          </button>
           <button
             onClick={() => setIsDriveModalOpen(true)}
             className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer"

@@ -6,6 +6,9 @@ import { Readable } from 'node:stream';
 import { supabase } from '../config/supabase.js';
 import { encryptSecret, decryptSecret } from '../config/crypto-vault.js';
 
+export const DEFAULT_GOOGLE_ACCOUNT_EMAIL = 'conexper.energia@gmail.com';
+export const DEFAULT_GOOGLE_ACCOUNT_NAME = 'Energy Intelligence';
+
 export const DEFAULT_OAUTH_CLIENT_ID =
   process.env.GOOGLE_OAUTH_CLIENT_ID ||
   '923408585511-cfgi4ath12e631bobgfetoki6t9udouk.apps.googleusercontent.com';
@@ -48,6 +51,8 @@ export interface DriveStatusResult {
   authType: 'service_account' | 'oauth2' | 'none';
   clientId?: string;
   serviceAccountEmail?: string;
+  targetAccountEmail?: string;
+  targetAccountName?: string;
   oauthAuthorized?: boolean;
   redirectUri?: string;
   defaultFolderId?: string;
@@ -74,16 +79,31 @@ async function loadDriveConfigRow(): Promise<{ row: any; creds: any }> {
       return { row, creds: null };
     }
 
+    let parsedCreds: any = null;
     try {
       const decrypted = decryptSecret(row.credentials_secret);
-      return { row, creds: JSON.parse(decrypted) };
+      parsedCreds = JSON.parse(decrypted);
     } catch {
       try {
-        return { row, creds: JSON.parse(row.credentials_secret) };
+        parsedCreds = JSON.parse(row.credentials_secret);
       } catch {
-        return { row, creds: null };
+        parsedCreds = null;
       }
     }
+
+    // Remove automaticamente qualquer configuração vinculada à conta pessoal wlamirzm@gmail.com
+    const rowEmail = String(row.service_account_email || '').toLowerCase();
+    const credsEmail = String(parsedCreds?.user_email || '').toLowerCase();
+    if (rowEmail === 'wlamirzm@gmail.com' || credsEmail === 'wlamirzm@gmail.com') {
+      await withFastTimeout(
+        supabase.from('google_drive_configs').delete().eq('id', row.id),
+        1000,
+        null as any
+      );
+      return { row: null, creds: null };
+    }
+
+    return { row, creds: parsedCreds };
   } catch {
     return { row: null, creds: null };
   }
@@ -172,7 +192,9 @@ export async function getDriveStatus(): Promise<DriveStatusResult> {
         configured: true,
         authType: 'oauth2',
         clientId: DEFAULT_OAUTH_CLIENT_ID,
-        serviceAccountEmail: DEFAULT_OAUTH_CLIENT_ID,
+        serviceAccountEmail: DEFAULT_GOOGLE_ACCOUNT_EMAIL,
+        targetAccountEmail: DEFAULT_GOOGLE_ACCOUNT_EMAIL,
+        targetAccountName: DEFAULT_GOOGLE_ACCOUNT_NAME,
         oauthAuthorized: false,
         redirectUri: DEFAULT_OAUTH_REDIRECT_URI,
         status: 'oauth_ready'
@@ -187,7 +209,9 @@ export async function getDriveStatus(): Promise<DriveStatusResult> {
         configured: true,
         authType: 'oauth2',
         clientId: creds?.client_id || DEFAULT_OAUTH_CLIENT_ID,
-        serviceAccountEmail: creds?.user_email || config.service_account_email || creds?.client_id,
+        serviceAccountEmail: creds?.user_email || DEFAULT_GOOGLE_ACCOUNT_EMAIL,
+        targetAccountEmail: DEFAULT_GOOGLE_ACCOUNT_EMAIL,
+        targetAccountName: DEFAULT_GOOGLE_ACCOUNT_NAME,
         oauthAuthorized: authorized,
         redirectUri: creds?.redirect_uri || DEFAULT_OAUTH_REDIRECT_URI,
         defaultFolderId: config.default_folder_id,
@@ -345,7 +369,8 @@ export async function getDriveOAuthAuthorizeUrl(customRedirectUri?: string): Pro
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    prompt: 'consent',
+    prompt: 'select_account consent',
+    login_hint: DEFAULT_GOOGLE_ACCOUNT_EMAIL,
     scope: DRIVE_OAUTH_SCOPES
   });
 
@@ -370,15 +395,21 @@ export async function handleDriveOAuthCallback(
   const { tokens } = await oauth2Client.getToken(code);
   oauth2Client.setCredentials(tokens);
 
-  let userEmail = creds?.user_email || clientId;
+  let userEmail = creds?.user_email || DEFAULT_GOOGLE_ACCOUNT_EMAIL;
   try {
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfo = await oauth2.userinfo.get();
     if (userInfo?.data?.email) {
-      userEmail = userInfo.data.email;
+      userEmail = String(userInfo.data.email).trim().toLowerCase();
     }
   } catch {
-    // fallback para clientId se userinfo não estiver no escopo
+    // fallback para conta corporativa padrão
+  }
+
+  if (userEmail === 'wlamirzm@gmail.com') {
+    throw new Error(
+      'A conta wlamirzm@gmail.com não é permitida. Autorize exclusivamente a conta Energy Intelligence (conexper.energia@gmail.com).'
+    );
   }
 
   const refreshToken = tokens.refresh_token || creds?.refresh_token;
