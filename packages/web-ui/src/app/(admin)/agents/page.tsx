@@ -351,13 +351,20 @@ export default function AgentsPage() {
   };
 
   const handleCleanDatabase = async () => {
-    if (!confirm('Deseja realmente limpar a base de dados? Todas as tarefas, faturas e clientes de teste serão excluídos. Os 17 agentes e tabelas regulatórias da ANEEL serão preservados.')) {
+    if (
+      !confirm(
+        'Deseja realmente zerar toda a base temporária e de demonstração? Todos os clientes, UCs, faturas, tarefas, aprovações, ações tomadas, sugestões preditivas e a base RAG do Segundo Cérebro serão apagados. Os 18 agentes, normas ANEEL e credenciais configuradas serão preservados.'
+      )
+    ) {
       return;
     }
     setCleaning(true);
     try {
       const res = await cleanDatabase();
-      alert(res.message || 'Base limpa com sucesso!');
+      const msg = res.message || 'Base temporária e RAG zerados com sucesso!';
+      setSavedMsg(msg);
+      setTimeout(() => setSavedMsg(null), 6000);
+      alert(msg);
     } catch (err: any) {
       alert(`Erro ao limpar base: ${err.message}`);
     } finally {
@@ -423,7 +430,7 @@ export default function AgentsPage() {
             Catálogo de Agentes & Governança de Prompts
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Converse diretamente com cada um dos 17 agentes autônomos ou ajuste seus system prompts e modelos de IA.
+            Converse diretamente com cada um dos 18 agentes autônomos ou ajuste seus system prompts e modelos de IA.
           </p>
         </div>
 

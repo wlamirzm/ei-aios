@@ -698,20 +698,74 @@ apiRouter.post('/api/v1/agents/:id/chat', async (req: Request, res: Response, ne
 // ------------------------------------------------------------------------------
 // 8. POST /api/v1/system/clean-database (Limpeza total para ambiente Zero KM)
 // ------------------------------------------------------------------------------
-apiRouter.post('/api/v1/system/clean-database', async (_req: Request, res: Response, next: NextFunction) => {
+apiRouter.post('/api/v1/system/clean-database', requireFounderAuth, async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    // Apaga dados transacionais e clientes piloto mantendo a estrutura dos 11 agentes e conhecimentos regulatórios
-    await supabase.from('approvals').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('artifacts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('energy_bills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('consumer_units').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('clients').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('agent_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+    const uuidTablesInSafeOrder = [
+      // Segundo Cérebro, Memória Episódica & RAG
+      'predictive_suggestions',
+      'founder_action_logs',
+      'knowledge_chunks',
+      // Relatórios, Decisões & E-mails Sincronizados
+      'diagnostic_reports',
+      'decision_logs',
+      'email_messages',
+      // FinOps, Receita & Unit Economics (ordem reversa de FK RESTRICT)
+      'revenue_receipts',
+      'revenue_invoices',
+      'success_fee_events',
+      'client_contracts',
+      'acquisition_expenses',
+      'operational_expenses',
+      'customer_acquisition_events',
+      'financial_metric_snapshots',
+      'finops_ledger',
+      // Core Operacional
+      'approvals',
+      'artifacts',
+      'agent_runs'
+    ];
+
+    const tablesCleaned: string[] = [];
+
+    for (const table of uuidTablesInSafeOrder) {
+      const { error } = await supabase.from(table).delete().neq('id', NIL_UUID);
+      if (!error) {
+        tablesCleaned.push(table);
+      }
+    }
+
+    // scheduler_locks usa job_name como PK
+    const { error: lockErr } = await supabase.from('scheduler_locks').delete().neq('job_name', '__none__');
+    if (!lockErr) tablesCleaned.push('scheduler_locks');
+
+    // Desvincula auto-referência parent_task_id antes de limpar tasks
+    await supabase.from('tasks').update({ parent_task_id: null }).neq('id', NIL_UUID);
+    for (const coreTable of ['tasks', 'energy_bills', 'consumer_units', 'clients']) {
+      const { error } = await supabase.from(coreTable).delete().neq('id', NIL_UUID);
+      if (!error) tablesCleaned.push(coreTable);
+    }
+
+    // Restaura pesos padrão da persona ativa do fundador
+    await supabase
+      .from('founder_personas')
+      .update({
+        decision_weights: {
+          vector_similarity_weight: 0.45,
+          business_rules_weight: 0.35,
+          temporal_freshness_weight: 0.20,
+          auto_approval_threshold: 0.90,
+          review_warning_threshold: 0.65
+        },
+        updated_at: new Date().toISOString()
+      })
+      .eq('slug', 'default-founder');
 
     res.json({
       success: true,
-      message: 'Base limpa com sucesso. Todos os registros de clientes, UCs e tarefas foram zerados. Catálogo dos 11 agentes e normas ANEEL intactos.',
+      tablesCleaned,
+      message:
+        'Base limpa com sucesso! Todos os clientes, UCs, faturas, tarefas, aprovações, artefatos, ações tomadas, sugestões preditivas e base RAG foram zerados. Os 18 agentes, normas ANEEL e credenciais configuradas foram preservados.',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
