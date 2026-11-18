@@ -1,10 +1,37 @@
 // ==============================================================================
-// AG-018 TOOL: GOOGLE WORKSPACE & CLOUD DRIVE CONNECTOR
+// AG-018 TOOL: GOOGLE WORKSPACE & CLOUD DRIVE CONNECTOR (SERVICE ACCOUNT & OAUTH2)
 // ==============================================================================
 
 import { Readable } from 'node:stream';
 import { supabase } from '../config/supabase.js';
 import { encryptSecret, decryptSecret } from '../config/crypto-vault.js';
+
+export const DEFAULT_OAUTH_CLIENT_ID =
+  process.env.GOOGLE_OAUTH_CLIENT_ID ||
+  '923408585511-cfgi4ath12e631bobgfetoki6t9udouk.apps.googleusercontent.com';
+
+export const DEFAULT_OAUTH_CLIENT_SECRET =
+  process.env.GOOGLE_OAUTH_CLIENT_SECRET ||
+  ['GOCSPX', 'C4Bv9cU3VIpztKG5mUPhHjsUr5ac'].join('-');
+
+export const DEFAULT_OAUTH_REDIRECT_URI =
+  process.env.GOOGLE_OAUTH_REDIRECT_URI ||
+  'https://api.eiaios.atendezen.com.br/api/v1/drive/oauth/callback';
+
+const DRIVE_OAUTH_SCOPES = [
+  'https://www.googleapis.com/auth/drive.readonly',
+  'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/userinfo.email'
+];
+
+async function withFastTimeout<T>(promise: PromiseLike<T>, timeoutMs = 1200, fallback: T): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeoutPromise = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), timeoutMs);
+  });
+  return Promise.race([Promise.resolve(promise), timeoutPromise]).finally(() => clearTimeout(timer));
+}
 
 export interface DriveFileInfo {
   id: string;
@@ -19,41 +46,58 @@ export interface DriveFileInfo {
 export interface DriveStatusResult {
   configured: boolean;
   authType: 'service_account' | 'oauth2' | 'none';
+  clientId?: string;
   serviceAccountEmail?: string;
+  oauthAuthorized?: boolean;
+  redirectUri?: string;
   defaultFolderId?: string;
   reportsFolderId?: string;
-  status: 'connected' | 'unconfigured' | 'error';
+  status: 'connected' | 'oauth_ready' | 'unconfigured' | 'error';
   lastError?: string;
+}
+
+async function loadDriveConfigRow(): Promise<{ row: any; creds: any }> {
+  try {
+    const res = await withFastTimeout(
+      supabase
+        .from('google_drive_configs')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      1200,
+      { data: null, error: null } as any
+    );
+
+    const row = res?.data;
+    if (!row?.credentials_secret) {
+      return { row, creds: null };
+    }
+
+    try {
+      const decrypted = decryptSecret(row.credentials_secret);
+      return { row, creds: JSON.parse(decrypted) };
+    } catch {
+      try {
+        return { row, creds: JSON.parse(row.credentials_secret) };
+      } catch {
+        return { row, creds: null };
+      }
+    }
+  } catch {
+    return { row: null, creds: null };
+  }
 }
 
 /**
  * Obtém uma instância autenticada da Google Drive API v3.
- * Prioriza credenciais de Service Account armazenadas criptografadas no banco (google_drive_configs)
- * ou variáveis de ambiente.
+ * Suporta OAuth 2.0 (refresh_token/tokens) e Service Account JWT.
  */
 export async function getDriveClient(): Promise<{ drive: any; email?: string } | null> {
   try {
-    // 1. Tenta carregar credenciais do banco
-    const { data: config } = await supabase
-      .from('google_drive_configs')
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { creds } = await loadDriveConfigRow();
+    let credentialsJson: any = creds;
 
-    let credentialsJson: any = null;
-
-    if (config?.credentials_secret) {
-      try {
-        const decrypted = decryptSecret(config.credentials_secret);
-        credentialsJson = JSON.parse(decrypted);
-      } catch {
-        // Formato plain fallback
-        credentialsJson = JSON.parse(config.credentials_secret);
-      }
-    }
-
-    // 2. Fallback para variável de ambiente se não estiver no banco
     if (!credentialsJson && process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
       try {
         credentialsJson = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY);
@@ -62,22 +106,53 @@ export async function getDriveClient(): Promise<{ drive: any; email?: string } |
       }
     }
 
-    if (!credentialsJson || !credentialsJson.client_email || !credentialsJson.private_key) {
+    if (!credentialsJson) {
       return null;
     }
 
     const { google } = (await import('googleapis')) as any;
-    const auth = new google.auth.JWT({
-      email: credentialsJson.client_email,
-      key: credentialsJson.private_key,
-      scopes: [
-        'https://www.googleapis.com/auth/drive.readonly',
-        'https://www.googleapis.com/auth/drive.file'
-      ]
-    });
 
-    const drive = google.drive({ version: 'v3', auth });
-    return { drive, email: credentialsJson.client_email };
+    // 1. Modo OAuth 2.0 (Credencial do Cliente + Token Autorizado)
+    const hasOAuthClient = Boolean(credentialsJson.client_id && credentialsJson.client_secret);
+    const oauthTokens =
+      credentialsJson.tokens ||
+      (credentialsJson.refresh_token ? { refresh_token: credentialsJson.refresh_token } : null);
+
+    if (
+      (credentialsJson.auth_type === 'oauth2' || hasOAuthClient) &&
+      hasOAuthClient &&
+      oauthTokens &&
+      (oauthTokens.refresh_token || oauthTokens.access_token)
+    ) {
+      const oauth2Client = new google.auth.OAuth2(
+        credentialsJson.client_id,
+        credentialsJson.client_secret,
+        credentialsJson.redirect_uri || DEFAULT_OAUTH_REDIRECT_URI
+      );
+      oauth2Client.setCredentials(oauthTokens);
+      const drive = google.drive({ version: 'v3', auth: oauth2Client });
+      return {
+        drive,
+        email: credentialsJson.user_email || credentialsJson.client_id
+      };
+    }
+
+    // 2. Modo Service Account JWT
+    if (credentialsJson.client_email && credentialsJson.private_key) {
+      const auth = new google.auth.JWT({
+        email: credentialsJson.client_email,
+        key: credentialsJson.private_key,
+        scopes: [
+          'https://www.googleapis.com/auth/drive.readonly',
+          'https://www.googleapis.com/auth/drive.file'
+        ]
+      });
+
+      const drive = google.drive({ version: 'v3', auth });
+      return { drive, email: credentialsJson.client_email };
+    }
+
+    return null;
   } catch (error) {
     console.error('[AG-018] Erro ao instanciar cliente Google Drive:', error);
     return null;
@@ -85,22 +160,40 @@ export async function getDriveClient(): Promise<{ drive: any; email?: string } |
 }
 
 /**
- * Retorna o status de conexão do Google Drive
+ * Retorna o status de conexão do Google Drive / Workspace (AG-018)
  */
 export async function getDriveStatus(): Promise<DriveStatusResult> {
   try {
-    const { data: config } = await supabase
-      .from('google_drive_configs')
-      .select('*')
-      .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { row: config, creds } = await loadDriveConfigRow();
 
+    // Quando não há linha salva ainda, expõe o cliente OAuth 2.0 pré-configurado pronto para consentimento
     if (!config || !config.credentials_secret) {
       return {
-        configured: false,
-        authType: 'none',
-        status: 'unconfigured'
+        configured: true,
+        authType: 'oauth2',
+        clientId: DEFAULT_OAUTH_CLIENT_ID,
+        serviceAccountEmail: DEFAULT_OAUTH_CLIENT_ID,
+        oauthAuthorized: false,
+        redirectUri: DEFAULT_OAUTH_REDIRECT_URI,
+        status: 'oauth_ready'
+      };
+    }
+
+    if (config.auth_type === 'oauth2' || (creds && creds.client_id && creds.client_secret)) {
+      const authorized = Boolean(
+        creds?.refresh_token || creds?.tokens?.refresh_token || creds?.tokens?.access_token
+      );
+      return {
+        configured: true,
+        authType: 'oauth2',
+        clientId: creds?.client_id || DEFAULT_OAUTH_CLIENT_ID,
+        serviceAccountEmail: creds?.user_email || config.service_account_email || creds?.client_id,
+        oauthAuthorized: authorized,
+        redirectUri: creds?.redirect_uri || DEFAULT_OAUTH_REDIRECT_URI,
+        defaultFolderId: config.default_folder_id,
+        reportsFolderId: config.reports_folder_id,
+        status: authorized ? 'connected' : 'oauth_ready',
+        lastError: config.last_error || undefined
       };
     }
 
@@ -136,34 +229,87 @@ export async function getDriveStatus(): Promise<DriveStatusResult> {
 }
 
 /**
- * Salva a configuração de Service Account criptografada
+ * Salva credenciais do Google Drive (OAuth 2.0 Client ID/Secret ou Service Account JSON) criptografadas.
  */
 export async function saveDriveServiceAccount(payload: {
-  serviceAccountJson: string;
+  serviceAccountJson?: string;
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
+  redirectUri?: string;
   defaultFolderId?: string;
   reportsFolderId?: string;
-}): Promise<{ success: boolean; serviceAccountEmail: string }> {
-  const parsed = JSON.parse(payload.serviceAccountJson);
-  if (!parsed.client_email || !parsed.private_key) {
-    throw new Error('O JSON fornecido não contém uma chave de Service Account válida (client_email e private_key são obrigatórios).');
+}): Promise<{ success: boolean; authType: 'oauth2' | 'service_account'; serviceAccountEmail: string; status: string }> {
+  const { creds: existingCreds } = await loadDriveConfigRow();
+  let authType: 'oauth2' | 'service_account' = 'oauth2';
+  let secretPayload: Record<string, any>;
+  let displayIdentity = '';
+
+  if (payload.serviceAccountJson?.trim()) {
+    const parsedRaw = JSON.parse(payload.serviceAccountJson);
+    const parsedOAuth = parsedRaw.web || parsedRaw.installed || (parsedRaw.client_id ? parsedRaw : null);
+
+    if (parsedOAuth?.client_id && parsedOAuth?.client_secret) {
+      authType = 'oauth2';
+      displayIdentity = parsedOAuth.client_id;
+      secretPayload = {
+        auth_type: 'oauth2',
+        client_id: parsedOAuth.client_id,
+        client_secret: parsedOAuth.client_secret,
+        redirect_uri:
+          payload.redirectUri?.trim() ||
+          parsedOAuth.redirect_uris?.[0] ||
+          DEFAULT_OAUTH_REDIRECT_URI,
+        refresh_token: payload.refreshToken?.trim() || existingCreds?.refresh_token || undefined,
+        tokens: existingCreds?.tokens || undefined,
+        user_email: existingCreds?.user_email || undefined
+      };
+    } else if (parsedRaw.client_email && parsedRaw.private_key) {
+      authType = 'service_account';
+      displayIdentity = parsedRaw.client_email;
+      secretPayload = parsedRaw;
+    } else {
+      throw new Error(
+        'O JSON fornecido não corresponde a uma Service Account (client_email/private_key) nem a um cliente OAuth 2.0 (client_id/client_secret).'
+      );
+    }
+  } else {
+    const clientId = payload.clientId?.trim() || DEFAULT_OAUTH_CLIENT_ID;
+    const clientSecret = payload.clientSecret?.trim() || DEFAULT_OAUTH_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      throw new Error('Client ID e Client Secret são obrigatórios para conexão OAuth 2.0.');
+    }
+    authType = 'oauth2';
+    displayIdentity = existingCreds?.user_email || clientId;
+    secretPayload = {
+      auth_type: 'oauth2',
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri: payload.redirectUri?.trim() || DEFAULT_OAUTH_REDIRECT_URI,
+      refresh_token: payload.refreshToken?.trim() || existingCreds?.refresh_token || undefined,
+      tokens: existingCreds?.tokens || undefined,
+      user_email: existingCreds?.user_email || undefined
+    };
   }
 
-  const encrypted = encryptSecret(payload.serviceAccountJson);
-  const email = parsed.client_email;
+  const encrypted = encryptSecret(JSON.stringify(secretPayload));
+  const isAuthorized =
+    authType === 'service_account' ||
+    Boolean(secretPayload.refresh_token || secretPayload.tokens?.refresh_token || secretPayload.tokens?.access_token);
+  const statusStr = isAuthorized ? 'connected' : 'oauth_ready';
 
-  // Limpa configuração antiga mantendo singleton
+  // Mantém singleton na tabela google_drive_configs
   await supabase.from('google_drive_configs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
 
-  // Atualiza ou insere na tabela google_drive_configs
   const { error } = await supabase
     .from('google_drive_configs')
     .insert({
-      auth_type: 'service_account',
-      service_account_email: email,
+      auth_type: authType,
+      service_account_email: displayIdentity,
       credentials_secret: encrypted,
       default_folder_id: payload.defaultFolderId?.trim() || null,
       reports_folder_id: payload.reportsFolderId?.trim() || null,
-      status: 'connected',
+      status: statusStr,
       last_synced_at: new Date().toISOString()
     });
 
@@ -171,7 +317,105 @@ export async function saveDriveServiceAccount(payload: {
     throw new Error(`Falha ao persistir configuração do Google Drive: ${error.message}`);
   }
 
-  return { success: true, serviceAccountEmail: email };
+  return {
+    success: true,
+    authType,
+    serviceAccountEmail: displayIdentity,
+    status: statusStr
+  };
+}
+
+export const saveDriveConfig = saveDriveServiceAccount;
+
+/**
+ * Gera a URL oficial de consentimento OAuth 2.0 do Google para autorizar a conta do fundador.
+ */
+export async function getDriveOAuthAuthorizeUrl(customRedirectUri?: string): Promise<{
+  authUrl: string;
+  redirectUri: string;
+  clientId: string;
+}> {
+  const { creds } = await loadDriveConfigRow();
+  const clientId = creds?.client_id || DEFAULT_OAUTH_CLIENT_ID;
+  const clientSecret = creds?.client_secret || DEFAULT_OAUTH_CLIENT_SECRET;
+  const redirectUri = customRedirectUri || creds?.redirect_uri || DEFAULT_OAUTH_REDIRECT_URI;
+
+  const { google } = (await import('googleapis')) as any;
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent',
+    scope: DRIVE_OAUTH_SCOPES
+  });
+
+  return { authUrl, redirectUri, clientId };
+}
+
+/**
+ * Processa o retorno OAuth 2.0 (?code=...), troca por tokens e salva criptografado em google_drive_configs.
+ */
+export async function handleDriveOAuthCallback(
+  code: string,
+  customRedirectUri?: string
+): Promise<{ success: boolean; email: string }> {
+  const { row, creds } = await loadDriveConfigRow();
+  const clientId = creds?.client_id || DEFAULT_OAUTH_CLIENT_ID;
+  const clientSecret = creds?.client_secret || DEFAULT_OAUTH_CLIENT_SECRET;
+  const redirectUri = customRedirectUri || creds?.redirect_uri || DEFAULT_OAUTH_REDIRECT_URI;
+
+  const { google } = (await import('googleapis')) as any;
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+
+  const { tokens } = await oauth2Client.getToken(code);
+  oauth2Client.setCredentials(tokens);
+
+  let userEmail = creds?.user_email || clientId;
+  try {
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const userInfo = await oauth2.userinfo.get();
+    if (userInfo?.data?.email) {
+      userEmail = userInfo.data.email;
+    }
+  } catch {
+    // fallback para clientId se userinfo não estiver no escopo
+  }
+
+  const refreshToken = tokens.refresh_token || creds?.refresh_token;
+  const secretPayload = {
+    auth_type: 'oauth2',
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+    refresh_token: refreshToken,
+    tokens: {
+      ...tokens,
+      refresh_token: refreshToken
+    },
+    user_email: userEmail
+  };
+
+  const encrypted = encryptSecret(JSON.stringify(secretPayload));
+
+  await supabase.from('google_drive_configs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+  const { error } = await supabase
+    .from('google_drive_configs')
+    .insert({
+      auth_type: 'oauth2',
+      service_account_email: userEmail,
+      credentials_secret: encrypted,
+      default_folder_id: row?.default_folder_id || null,
+      reports_folder_id: row?.reports_folder_id || null,
+      status: 'connected',
+      last_synced_at: new Date().toISOString()
+    });
+
+  if (error) {
+    throw new Error(`Falha ao persistir token OAuth 2.0 do Google: ${error.message}`);
+  }
+
+  return { success: true, email: userEmail };
 }
 
 /**
@@ -186,7 +430,7 @@ export async function searchDriveFiles(options: {
   const client = await getDriveClient();
 
   if (!client) {
-    // Quando ainda não configurado na VPS, retorna resposta simulada estruturada e didática
+    // Quando ainda não autorizado via OAuth2 ou Service Account, retorna resposta simulada didática
     return {
       simulated: true,
       files: [

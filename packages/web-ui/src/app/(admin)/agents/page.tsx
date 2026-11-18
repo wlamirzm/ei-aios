@@ -17,7 +17,8 @@ import {
   Loader2,
   KeyRound,
   Smartphone,
-  ExternalLink
+  ExternalLink,
+  HardDrive
 } from 'lucide-react';
 import {
   chatWithAgent,
@@ -28,7 +29,10 @@ import {
   updateAgentConfig,
   fetchTelegramStatus,
   configureTelegram,
-  sendTelegramMessage
+  sendTelegramMessage,
+  fetchDriveStatus,
+  configureDriveServiceAccount,
+  fetchDriveOAuthUrl
 } from '@/lib/api-client';
 import { CorporateMarkdown } from '@/components/ExecutiveDeliverableView';
 
@@ -249,6 +253,18 @@ export default function AgentsPage() {
   const [isSavingTelegram, setIsSavingTelegram] = useState(false);
   const [telegramFeedback, setTelegramFeedback] = useState<string | null>(null);
 
+  // Estado da Conexão com o Google Workspace / Drive (AG-018)
+  const [driveStatus, setDriveStatus] = useState<any>(null);
+  const [isDriveModalOpen, setIsDriveModalOpen] = useState(false);
+  const [driveClientId, setDriveClientId] = useState(
+    '923408585511-cfgi4ath12e631bobgfetoki6t9udouk.apps.googleusercontent.com'
+  );
+  const [driveClientSecret, setDriveClientSecret] = useState('');
+  const [driveDefaultFolderId, setDriveDefaultFolderId] = useState('');
+  const [driveReportsFolderId, setDriveReportsFolderId] = useState('');
+  const [isSavingDrive, setIsSavingDrive] = useState(false);
+  const [driveFeedback, setDriveFeedback] = useState<string | null>(null);
+
   // Estado do Chat Drawer
   const [activeChatAgent, setActiveChatAgent] = useState<AgentCard | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -256,6 +272,15 @@ export default function AgentsPage() {
   const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('drive_oauth') === 'connected') {
+        setSavedMsg('✅ Conta Google OAuth 2.0 autorizada e conectada com sucesso ao AG-018!');
+        setTimeout(() => setSavedMsg(null), 6000);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+
     fetchLlmStatus()
       .then((res) => {
         setLlmStatus(res);
@@ -267,6 +292,15 @@ export default function AgentsPage() {
       .then((res) => {
         setTelegramStatus(res);
         if (res?.adminChatId) setTelegramChatId(res.adminChatId);
+      })
+      .catch(() => {});
+
+    fetchDriveStatus()
+      .then((res) => {
+        setDriveStatus(res);
+        if (res?.clientId) setDriveClientId(res.clientId);
+        if (res?.defaultFolderId) setDriveDefaultFolderId(res.defaultFolderId);
+        if (res?.reportsFolderId) setDriveReportsFolderId(res.reportsFolderId);
       })
       .catch(() => {});
 
@@ -328,6 +362,47 @@ export default function AgentsPage() {
       setTelegramFeedback(`❌ Erro: ${err.message || 'Falha ao conectar Telegram'}`);
     } finally {
       setIsSavingTelegram(false);
+    }
+  };
+
+  const handleSaveDriveConfig = async () => {
+    setIsSavingDrive(true);
+    setDriveFeedback(null);
+    try {
+      const res = await configureDriveServiceAccount({
+        clientId: driveClientId.trim() || undefined,
+        clientSecret: driveClientSecret.trim() || undefined,
+        defaultFolderId: driveDefaultFolderId.trim() || undefined,
+        reportsFolderId: driveReportsFolderId.trim() || undefined
+      });
+      setDriveFeedback(
+        res.status === 'connected'
+          ? `✅ Credenciais Google OAuth 2.0 salvas e conta conectada (${res.serviceAccountEmail})!`
+          : '✅ Credenciais OAuth 2.0 salvas com sucesso! Clique em "Autorizar Conta no Google" abaixo para conceder acesso ao Drive.'
+      );
+      fetchDriveStatus().then((s) => setDriveStatus(s)).catch(() => {});
+    } catch (err: any) {
+      setDriveFeedback(`❌ Erro: ${err.message || 'Falha ao salvar credenciais Google'}`);
+    } finally {
+      setIsSavingDrive(false);
+    }
+  };
+
+  const handleLaunchGoogleOAuth = async () => {
+    try {
+      setDriveFeedback(null);
+      await configureDriveServiceAccount({
+        clientId: driveClientId.trim() || undefined,
+        clientSecret: driveClientSecret.trim() || undefined,
+        defaultFolderId: driveDefaultFolderId.trim() || undefined,
+        reportsFolderId: driveReportsFolderId.trim() || undefined
+      });
+      const res = await fetchDriveOAuthUrl();
+      if (res?.authUrl) {
+        window.location.href = res.authUrl;
+      }
+    } catch (err: any) {
+      setDriveFeedback(`❌ Erro ao iniciar login OAuth Google: ${err.message}`);
     }
   };
 
@@ -552,6 +627,56 @@ export default function AgentsPage() {
           <Smartphone className="w-3.5 h-3.5" />
           <span>{telegramStatus?.configured ? 'Gerenciar Telegram' : 'Conectar Telegram (AG-016)'}</span>
         </button>
+      </div>
+
+      {/* CONEXÃO GOOGLE WORKSPACE & CLOUD DRIVE (AG-018 — OAUTH 2.0) */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg border ${driveStatus?.status === 'connected' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
+            <HardDrive className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-white">Google Workspace & Cloud Drive (AG-018):</span>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                driveStatus?.status === 'connected'
+                  ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                  : 'bg-amber-950/60 border-amber-500/40 text-amber-300'
+              }`}>
+                {driveStatus?.status === 'connected'
+                  ? '🟢 CONECTADO (OAUTH 2.0)'
+                  : '🟡 OAUTH 2.0 CONFIGURADO (AGUARDANDO LOGIN)'}
+              </span>
+              {(driveStatus?.clientId || driveClientId) && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                  Client ID: {(driveStatus?.clientId || driveClientId).slice(0, 24)}...
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Permite ao AG-018 e ao Bootstrap RAG ler propostas, faturas no Google Drive e consultar agenda do Google Calendar.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {driveStatus?.status !== 'connected' && (
+            <button
+              onClick={handleLaunchGoogleOAuth}
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition shadow-sm cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Autorizar Conta Google</span>
+            </button>
+          )}
+          <button
+            onClick={() => setIsDriveModalOpen(true)}
+            className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold px-3.5 py-2 rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer"
+          >
+            <HardDrive className="w-3.5 h-3.5" />
+            <span>Gerenciar Google Drive</span>
+          </button>
+        </div>
       </div>
 
       {/* GRADE DOS AGENTES */}
@@ -891,6 +1016,128 @@ export default function AgentsPage() {
                     <span>Salvar e Disparar Teste</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIGURAÇÃO GOOGLE WORKSPACE & DRIVE OAUTH 2.0 (AG-018) */}
+      {isDriveModalOpen && (
+        <div className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in-50 duration-200">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <HardDrive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base">Google Workspace & Drive OAuth 2.0 (AG-018)</h3>
+                  <p className="text-xs text-slate-400">Credenciais do Cliente Google Cloud & Autorização</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDriveModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-slate-300">
+              <div className="p-3 bg-emerald-950/30 border border-emerald-500/30 rounded-xl space-y-1 text-[11px] leading-relaxed">
+                <p className="font-bold text-emerald-300">URI de Redirecionamento Autorizado (Google Cloud Console):</p>
+                <code className="block bg-slate-950 px-2.5 py-1.5 rounded text-emerald-200 font-mono text-[10px] select-all">
+                  https://api.eiaios.atendezen.com.br/api/v1/drive/oauth/callback
+                </code>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                  ID do Cliente OAuth 2.0:
+                </label>
+                <input
+                  type="text"
+                  value={driveClientId}
+                  onChange={(e) => setDriveClientId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                  Chave Secreta do Cliente (opcional se já pré-configurada):
+                </label>
+                <input
+                  type="password"
+                  placeholder="Deixe em branco para usar a chave já cadastrada na plataforma"
+                  value={driveClientSecret}
+                  onChange={(e) => setDriveClientSecret(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white placeholder-slate-600 font-mono text-xs focus:outline-none focus:border-emerald-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                    Pasta Padrão (Folder ID opcional):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 1AbC..."
+                    value={driveDefaultFolderId}
+                    onChange={(e) => setDriveDefaultFolderId(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1 text-[11px]">
+                    Pasta de Laudos (Folder ID opcional):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 1XyZ..."
+                    value={driveReportsFolderId}
+                    onChange={(e) => setDriveReportsFolderId(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-white font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              {driveFeedback && (
+                <div
+                  className={`p-3 rounded-lg text-xs font-mono leading-relaxed ${
+                    driveFeedback.startsWith('✅')
+                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-500/10 border border-rose-500/30 text-rose-300'
+                  }`}
+                >
+                  {driveFeedback}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setIsDriveModalOpen(false)}
+                className="px-4 py-2 rounded-lg border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white text-xs font-semibold transition cursor-pointer"
+              >
+                Fechar
+              </button>
+              <button
+                onClick={handleSaveDriveConfig}
+                disabled={isSavingDrive}
+                className="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-semibold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{isSavingDrive ? 'Salvando...' : 'Salvar Credenciais'}</span>
+              </button>
+              <button
+                onClick={handleLaunchGoogleOAuth}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 transition shadow-md cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Autorizar Conta no Google</span>
               </button>
             </div>
           </div>

@@ -39,7 +39,9 @@ import {
   getDriveStatus,
   saveDriveServiceAccount,
   searchDriveFiles,
-  uploadDriveReport
+  uploadDriveReport,
+  getDriveOAuthAuthorizeUrl,
+  handleDriveOAuthCallback
 } from '../tools/google-drive.js';
 import { DEFAULT_AGENT_REGISTRY } from '../agents/registry.js';
 import {
@@ -1537,7 +1539,7 @@ apiRouter.post('/api/v1/emails/send', async (req: Request, res: Response) => {
 // ------------------------------------------------------------------------------
 // ROTAS GOOGLE DRIVE / WORKSPACE (AG-018)
 // ------------------------------------------------------------------------------
-apiRouter.get('/api/v1/drive/status', async (_req: Request, res: Response) => {
+apiRouter.get('/api/v1/drive/status', requireFounderAuth, async (_req: Request, res: Response) => {
   try {
     const status = await getDriveStatus();
     res.json({ success: true, ...status });
@@ -1548,19 +1550,56 @@ apiRouter.get('/api/v1/drive/status', async (_req: Request, res: Response) => {
 
 apiRouter.post('/api/v1/drive/config', requireFounderAuth, async (req: Request, res: Response) => {
   try {
-    const { serviceAccountJson, defaultFolderId, reportsFolderId } = req.body || {};
-    if (!serviceAccountJson) {
-      res.status(400).json({ error: 'O JSON da Service Account é obrigatório.' });
-      return;
-    }
+    const {
+      serviceAccountJson,
+      clientId,
+      clientSecret,
+      refreshToken,
+      defaultFolderId,
+      reportsFolderId
+    } = req.body || {};
+
     const result = await saveDriveServiceAccount({
       serviceAccountJson,
+      clientId,
+      clientSecret,
+      refreshToken,
       defaultFolderId,
       reportsFolderId
     });
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err?.message || 'Erro ao salvar configuração do Google Drive' });
+  }
+});
+
+apiRouter.get('/api/v1/drive/oauth/authorize', requireFounderAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await getDriveOAuthAuthorizeUrl();
+    if (req.query.redirect === 'true') {
+      res.redirect(result.authUrl);
+      return;
+    }
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Falha ao gerar URL de autorização OAuth 2.0' });
+  }
+});
+
+apiRouter.get('/api/v1/drive/oauth/callback', async (req: Request, res: Response) => {
+  try {
+    const code = req.query.code as string | undefined;
+    if (!code) {
+      res.status(400).send('Código de autorização OAuth ausente.');
+      return;
+    }
+    await handleDriveOAuthCallback(code);
+    const webAppOrigin = `https://app.${env.DOMAIN || 'eiaios.atendezen.com.br'}`;
+    res.redirect(`${webAppOrigin}/agents?drive_oauth=connected`);
+  } catch (err: any) {
+    res
+      .status(500)
+      .send(`Erro ao concluir autenticação OAuth 2.0 Google: ${err?.message || String(err)}`);
   }
 });
 

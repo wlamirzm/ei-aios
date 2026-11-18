@@ -355,14 +355,17 @@ export async function sendEmailMessage(payload: {
 export async function fetchDriveStatus() {
   const res = await fetch(`${getBaseUrl()}/api/v1/drive/status`, {
     cache: 'no-store',
-    headers: getAuthHeaders(false)
+    headers: getAuthHeaders(true)
   });
   if (!res.ok) throw new Error('Falha ao obter status do Google Drive');
   return res.json();
 }
 
 export async function configureDriveServiceAccount(payload: {
-  serviceAccountJson: string;
+  serviceAccountJson?: string;
+  clientId?: string;
+  clientSecret?: string;
+  refreshToken?: string;
   defaultFolderId?: string;
   reportsFolderId?: string;
 }) {
@@ -373,6 +376,16 @@ export async function configureDriveServiceAccount(payload: {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data?.error || 'Falha ao salvar configuração do Google Drive');
+  return data;
+}
+
+export async function fetchDriveOAuthUrl() {
+  const res = await fetch(`${getBaseUrl()}/api/v1/drive/oauth/authorize`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(true)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || 'Falha ao gerar link OAuth 2.0 do Google');
   return data;
 }
 
